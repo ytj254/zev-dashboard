@@ -1,32 +1,24 @@
-from dash import Dash, html
-import dash_leaflet as dl
-from db import get_fleet_data
+# app.py
+from dash import Dash, html, dcc, page_container
+import dash_bootstrap_components as dbc
 
-app = Dash(__name__)
-app.title = "ZEV Fleet Map"
+app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
 
-df = get_fleet_data()
-
-app.layout = html.Div([
-    html.H1("ZEV Fleet Map"),
-    dl.Map(center=[40.8, -77.8], zoom=7, style={'height': '90vh'}, children=[
-        dl.TileLayer(),
-        dl.LayerGroup([
-            dl.Marker(
-                position=[row["latitude"], row["longitude"]],
-                children=dl.Popup([
-                    html.B(row["fleet"]),
-                    html.Br(),
-                    f"ZEVs: {row['zev_tot']}",
-                    html.Br(),
-                    f"Vendor: {row['vendor_name']}",
-                    html.Br(),
-                    row["depot_adr"]
-                ])
-            ) for _, row in df.iterrows()
-        ])
-    ])
-])
+app.layout = dbc.Container([
+    dbc.Nav([
+        dbc.NavLink("Overview", href="/", active="exact"),
+        dbc.NavLink("Fleet", href="/fleet_info", active="exact"),
+        dbc.NavLink("Vehicle", href="/vehicle_infor", active="exact"),
+        dbc.NavLink("Charger", href="/charger_info", active="exact"),
+        dbc.NavLink("Maintenance", href="/maintenance", active="exact"),
+        dbc.NavLink("Charging Events", href="/charging", active="exact"),
+        dbc.NavLink("Telematics", href="/telematics", active="exact"),
+        dbc.NavLink("Vehicle Daily Usage", href="/veh_daily_usage", active="exact"),
+        dbc.NavLink("Analysis", href="/analysis", active="exact"),
+    ], pills=True),
+    html.Hr(),
+    page_container
+], fluid=True)
 
 if __name__ == "__main__":
-    app.run_server(debug=True)
+    app.run(debug=True)

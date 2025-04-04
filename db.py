@@ -1,19 +1,12 @@
-import psycopg2
+from sqlalchemy import create_engine
 import pandas as pd
 
+engine = create_engine("postgresql://postgres:25472@localhost:5432/zev_performance")
+
 def get_fleet_data():
-    conn = psycopg2.connect(
-        dbname="zev_performance",
-        user="postgres",
-        password="25472",
-        host="localhost",
-        port=5432
-    )
     query = """
-        SELECT id, fleet, latitude, longitude, zev_tot, vendor_name, depot_adr
+        SELECT id, fleet_name, fleet_size, zev_tot, zev_grant, charger_grant, depot_adr, vendor_name, latitude, longitude
         FROM fleet
         WHERE latitude IS NOT NULL AND longitude IS NOT NULL
     """
-    df = pd.read_sql(query, conn)
-    conn.close()
-    return df
+    return pd.read_sql(query, engine)
