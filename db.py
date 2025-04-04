@@ -3,9 +3,9 @@ import pandas as pd
 
 def get_fleet_data():
     conn = psycopg2.connect(
-        dbname="your_db",
-        user="your_user",
-        password="your_pass",
+        dbname="zev_performance",
+        user="postgres",
+        password="25472",
         host="localhost",
         port=5432
     )
