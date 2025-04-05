@@ -1,4 +1,4 @@
-from dash import register_page, html, Output, Input, callback
+from dash import register_page, html, Output, Input, callback, ALL
 import dash_leaflet as dl
 import dash_bootstrap_components as dbc
 from dash import ctx
@@ -14,10 +14,10 @@ df = df[df["latitude"].notnull() & df["longitude"].notnull()]
 # Create markers with pattern-matching IDs
 markers = [
     dl.Marker(
+        children=dl.Tooltip(row["fleet_name"]),
         id={"type": "fleet-marker", "index": int(row["id"])},
         position=[row["latitude"], row["longitude"]],
-        children=dl.Tooltip(row["fleet_name"])
-    )
+        )
     for _, row in df.iterrows()
 ]
 
@@ -28,15 +28,16 @@ layout = dbc.Row([
     ], width=4, style={"padding": "1rem", "height": "90vh", "overflowY": "auto", "background": "#f8f9fa"}),
 
     dbc.Col([
-        dl.Map(center=[40.8, -77.8], zoom=7, style={'height': '90vh'}, children=[
+        dl.Map(children=[
             dl.TileLayer(),
             dl.LayerGroup(markers)
-        ])
+            ], 
+               center=[40.8, -77.8], zoom=7, style={'height': '90vh'}, 
+               )
     ], width=8)
 ])
 
 # Pattern-matching callback
-from dash import ALL
 @callback(
     Output("fleet-detail", "children"),
     Input({"type": "fleet-marker", "index": ALL}, "n_clicks")
