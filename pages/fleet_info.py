@@ -75,38 +75,34 @@ def update_fleet_info(n_clicks):
     df_charger_sub = df_charger[df_charger["fleet_id"] == fleet_id]
     # print(df_charger_sub.groupby(["charger_type_label", "connector_type_label"]).size())
 
-    return html.Div([
-        html.H4(fleet_row["fleet_name"], className="mt-3 mb-2"),
-        
-        html.Div([
-            html.H6("Fleet Summary"),
-            html.P(f"Fleet size: {format_if_notna(fleet_row['fleet_size'])}"),
-            html.P(f"ZEVs total: {format_if_notna(fleet_row['zev_tot'])}"),
-            html.P(f"ZEVs grant: {format_if_notna(fleet_row['zev_grant'])}"),
-            html.P(f"Charger grant: {format_if_notna(fleet_row['charger_grant'])}"),
-            html.P(f"Vendor: {fleet_row['vendor_name']}"),
-            html.P(f"Depot address: {fleet_row['depot_adr']}"),
-        ], className="mb-3"),
+    return dbc.Card([
+        dbc.CardHeader(html.H4(fleet_row["fleet_name"], className="mb-0")),
 
-        html.Hr(),
+        dbc.CardBody([
+            html.H6("Fleet Summary", className="text-primary mt-2"),
+            html.P(f"Fleet size: {format_if_notna(fleet_row['fleet_size'])}", className="mb-1"),
+            html.P(f"ZEVs total: {format_if_notna(fleet_row['zev_tot'])}", className="mb-1"),
+            html.P(f"ZEVs grant: {format_if_notna(fleet_row['zev_grant'])}", className="mb-1"),
+            html.P(f"Charger grant: {format_if_notna(fleet_row['charger_grant'])}", className="mb-1"),
+            html.P(f"Vendor: {fleet_row['vendor_name']}", className="mb-1"),
+            html.P(f"Depot address: {fleet_row['depot_adr']}", className="mb-3"),
 
-        html.Div([
-            html.H6("Vehicle Details"),
-            html.P(f"Total vehicles: {len(df_veh_sub)}"),
-            html.Ul([
-                html.Li(f"{make} {model} {year} – {count} vehicle(s)")
+            html.Hr(),
+
+            html.H6("Vehicle Details", className="text-primary"),
+            html.P(f"Total vehicles: {len(df_veh_sub)}", className="mb-2"),
+            dbc.ListGroup([
+                dbc.ListGroupItem(f"{make} {model} {year} – {count} vehicle(s)")
                 for (make, model, year), count in df_veh_sub.groupby(["make", "model", "year"]).size().items()
-            ]) if not df_veh_sub.empty else html.P("No vehicle data available.")
-        ], className="mb-3"),
+            ]) if not df_veh_sub.empty else html.P("No vehicle data available.", className="text-muted"),
 
-        html.Hr(),
+            html.Hr(),
 
-        html.Div([
-            html.H6("Charger Details"),
-            html.P(f"Total chargers: {len(df_charger_sub)}"),
-            html.Ul([
-                html.Li(f"{charger_type_label} / {connector_type_label} – {count} charger(s)")
+            html.H6("Charger Details", className="text-primary"),
+            html.P(f"Total chargers: {len(df_charger_sub)}", className="mb-2"),
+            dbc.ListGroup([
+                dbc.ListGroupItem(f"{charger_type_label} / {connector_type_label} – {count} charger(s)")
                 for (charger_type_label, connector_type_label), count in df_charger_sub.groupby(["charger_type_label", "connector_type_label"]).size().items()
-            ]) if not df_charger_sub.empty else html.P("No charger data available.")
+            ]) if not df_charger_sub.empty else html.P("No charger data available.", className="text-muted"),
         ])
-    ])
+    ], className="mb-3 shadow-sm")
