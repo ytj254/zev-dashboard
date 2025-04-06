@@ -52,7 +52,8 @@ layout = dbc.Row([
             dl.LayerGroup(markers),
             pa_border
             ], 
-               center=[40.8, -77.8], zoom=7, style={'height': '90vh'}, 
+               bounds=[[39.7198, -80.5199], [42.2695, -74.6895]],
+               style={'height': '90vh'}, 
                )
     ], width=9)
 ])
