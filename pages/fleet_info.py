@@ -14,7 +14,7 @@ with open("assets/pa_boundary.geojson") as f:
     
 pa_border = dl.GeoJSON(data=pa_geojson, 
                        options=dict(style=dict(color="red", weight=2, fill=False)), 
-                       hoverStyle=dict(weight=4, color="darkblue"))
+                       hoverStyle=dict(weight=2, color="darkblue"))
 
 # Load fleet data
 df_fleet = get_fleet_data()
