@@ -16,10 +16,12 @@ charger_type_map = {
 }
 
 connector_type_map = {
-    "1": "Level 1",
-    "2": "Level 2",
-    "3": "DCFC",
-    "4": "Other"
+    "1": "J1772",
+    "2": "CCS connector",
+    "3": "CHAdeMO connector",
+    "4": "Tesla connector",
+    "5": "Mennekes connector",
+    "6": "Other",
 }
 
 def map_multi_labels(series, mapping_dict):
