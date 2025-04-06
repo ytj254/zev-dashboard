@@ -2,14 +2,33 @@ from dash import register_page, html, Output, Input, callback, ALL
 import dash_leaflet as dl
 import dash_bootstrap_components as dbc
 from dash import ctx
-from db import get_fleet_data
-from utils import format_if_notna
+from db import get_fleet_data, get_veh_data, get_charger_data
+from utils import format_if_notna, battery_chem_map, charger_type_map, connector_type_map, map_multi_labels
+import json
 
 register_page(__name__, path="/fleet_info")
 
+# Load PA boundary GeoJSON (replace with your local path or URL fetch if needed)
+with open("assets/pa_boundary.geojson") as f:
+    pa_geojson = json.load(f)
+    
+pa_border = dl.GeoJSON(data=pa_geojson, 
+                       options=dict(style=dict(color="red", weight=2, fill=False)), 
+                       hoverStyle=dict(weight=4, color="darkblue"))
+
 # Load fleet data
-df = get_fleet_data()
-df = df[df["latitude"].notnull() & df["longitude"].notnull()]
+df_fleet = get_fleet_data()
+df_fleet = df_fleet[df_fleet["latitude"].notnull() & df_fleet["longitude"].notnull()]
+
+df_veh = get_veh_data()
+# df_veh["battery_chem_label"] = df_veh["battery_chem"].map(battery_chem_map)
+
+df_charger = get_charger_data()
+df_charger["charger_type_label"] = map_multi_labels(df_charger["charger_type"], charger_type_map)
+df_charger["connector_type_label"] = map_multi_labels(df_charger["connector_type"], connector_type_map)
+
+# print(df_veh.head())
+# print(df_charger.head())
 
 # Create markers with pattern-matching IDs
 markers = [
@@ -18,23 +37,24 @@ markers = [
         id={"type": "fleet-marker", "index": int(row["id"])},
         position=[row["latitude"], row["longitude"]],
         )
-    for _, row in df.iterrows()
+    for _, row in df_fleet.iterrows()
 ]
 
 layout = dbc.Row([
     dbc.Col([
         html.H4("Fleet Details"),
         html.Div("Click a marker to view fleet information.", id="fleet-detail")
-    ], width=4, style={"padding": "1rem", "height": "90vh", "overflowY": "auto", "background": "#f8f9fa"}),
+    ], width=3, style={"padding": "1rem", "height": "90vh", "overflowY": "auto", "background": "#f8f9fa"}),
 
     dbc.Col([
         dl.Map(children=[
             dl.TileLayer(),
-            dl.LayerGroup(markers)
+            dl.LayerGroup(markers),
+            pa_border
             ], 
                center=[40.8, -77.8], zoom=7, style={'height': '90vh'}, 
                )
-    ], width=8)
+    ], width=9)
 ])
 
 # Pattern-matching callback
@@ -48,14 +68,45 @@ def update_fleet_info(n_clicks):
         return "Click a marker to view fleet information."
 
     fleet_id = triggered["index"]
-    fleet_row = df[df["id"] == fleet_id].iloc[0]
+    fleet_row = df_fleet[df_fleet["id"] == fleet_id].iloc[0]
+    # print(fleet_id, type(fleet_id))
+    df_veh_sub = df_veh[df_veh["fleet_id"] == fleet_id]
+    # print(df_veh_sub.groupby(["make", "model", "year"]).size())
+    df_charger_sub = df_charger[df_charger["fleet_id"] == fleet_id]
+    # print(df_charger_sub.groupby(["charger_type_label", "connector_type_label"]).size())
 
     return html.Div([
-        html.H5(fleet_row["fleet_name"]),
-        html.P(f"Fleet size: {format_if_notna(fleet_row['fleet_size'])}"),
-        html.P(f"ZEVs total: {format_if_notna(fleet_row['zev_tot'])}"),
-        html.P(f"ZEVs grant: {format_if_notna(fleet_row['zev_grant'])}"),
-        html.P(f"Charger grant: {format_if_notna(fleet_row['charger_grant'])}"),
-        html.P(f"Vendor: {fleet_row['vendor_name']}"),
-        html.P(f"Depot address: {fleet_row['depot_adr']}"),
+        html.H4(fleet_row["fleet_name"], className="mt-3 mb-2"),
+        
+        html.Div([
+            html.H6("Fleet Summary"),
+            html.P(f"Fleet size: {format_if_notna(fleet_row['fleet_size'])}"),
+            html.P(f"ZEVs total: {format_if_notna(fleet_row['zev_tot'])}"),
+            html.P(f"ZEVs grant: {format_if_notna(fleet_row['zev_grant'])}"),
+            html.P(f"Charger grant: {format_if_notna(fleet_row['charger_grant'])}"),
+            html.P(f"Vendor: {fleet_row['vendor_name']}"),
+            html.P(f"Depot address: {fleet_row['depot_adr']}"),
+        ], className="mb-3"),
+
+        html.Hr(),
+
+        html.Div([
+            html.H6("Vehicle Details"),
+            html.P(f"Total vehicles: {len(df_veh_sub)}"),
+            html.Ul([
+                html.Li(f"{make} {model} {year} – {count} vehicle(s)")
+                for (make, model, year), count in df_veh_sub.groupby(["make", "model", "year"]).size().items()
+            ]) if not df_veh_sub.empty else html.P("No vehicle data available.")
+        ], className="mb-3"),
+
+        html.Hr(),
+
+        html.Div([
+            html.H6("Charger Details"),
+            html.P(f"Total chargers: {len(df_charger_sub)}"),
+            html.Ul([
+                html.Li(f"{charger_type_label} / {connector_type_label} – {count} charger(s)")
+                for (charger_type_label, connector_type_label), count in df_charger_sub.groupby(["charger_type_label", "connector_type_label"]).size().items()
+            ]) if not df_charger_sub.empty else html.P("No charger data available.")
+        ])
     ])
