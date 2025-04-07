@@ -3,33 +3,46 @@
 This project is a web-based dashboard for exploring fleet data related to zero-emission vehicles (ZEVs) in Pennsylvania. It visualizes fleet locations on a map and shows detailed information about each fleet’s vehicles and chargers. The goal is to help users, such as DEP staff or researchers, understand the makeup and distribution of ZEV fleets across the state.
 
 ---
+## Deployment
 
-## How the App Is Structured
+- **Frontend**: Deployed using [Render](https://render.com)
+- **Database**: Powered by [Supabase](https://supabase.com) PostgreSQL
 
-- `app.py`: Entry point that launches the Dash multi-page app
-- `pages/...`: Contains pages for each dashboard view:
-  - `overview.py`: Landing page
-  - `fleet_info.py`: Fleet map and details
-  - `charging.py`: Charger usage and types
-  - `telematics.py`: Telematics and trip summaries
-  - `veh_daily_usage.py`: Daily usage per vehicle
-  - `analysis.py`: Summary analysis and visualizations
-- `db.py`: Functions to load data from PostgreSQL (fleets, vehicles, chargers, etc.)
-- `utils.py`: Stores mappings for vehicle and charger types and helper functions
-- `assets/...`: Contains assets:
-  - `background.png`: Background picture for the overview page
-  - `pa_boundary.geojson`: GeoJSON file used to draw the Pennsylvania state boundary on the map
-
-> The project uses `dash`, `dash-bootstrap-components`, `dash-leaflet`, `pandas`, and `sqlalchemy`.
+The app is publicly accessible and supports interactive maps, real-time queries, and detailed fleet insights.
 
 ---
+## Project Structured
 
-## How to Run
+zev-dashboard/
+├── app.py              # Entry point for Dash multi-page app
+├── db.py               # Database connection and query functions
+├── utils.py            # Helper functions and mappings
+├── render.yaml         # Render auto-deploy configuration
+├── requirements.txt
+├── README.md
+├── assets/
+│   ├── background.png        # Background for overview page
+│   └── pa_boundary.geojson   # GeoJSON for PA boundary map
+└── pages/
+    ├── overview.py           # Landing page
+    ├── fleet_info.py         # Fleet map and details
+    ├── charging.py           # Charger usage and types
+    ├── telematics.py         # Telematics and trip summaries
+    ├── veh_daily_usage.py    # Daily usage per vehicle
+    └── analysis.py           # Summary analysis and visuals
 
-1. Set up a PostgreSQL database with ZEV fleet operation data:
+> This project uses `dash`, `dash-bootstrap-components`, `dash-leaflet`, `pandas`, `psycopg2`, `SQLAlchemy`, and `gunicorn`.
 
-2. Update the database connection info in `db.py`
+---
+## Deployment Setup (Render + Supabase)
 
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
+1. **Create a Supabase project**
+   - Sync your data with PostgreSQL
+   - Get your database connection string (`project-ref` and password)
+
+2. **Deploy on Render**
+   - Choose a **Web Service**
+   - Add `DATABASE_URL` as an environment variable
+   - Use `gunicorn app:server` as the start command
+
+3. **Optional**: Add a `render.yaml` file for auto-deploy config.
