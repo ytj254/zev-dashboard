@@ -32,6 +32,7 @@ zev-dashboard/
     ├── charging.py           # Charger usage and types
     ├── telematics.py         # Telematics and trip summaries
     ├── veh_daily_usage.py    # Daily usage per vehicle
+    ├── maintenance.py        # Maintenance event summaries
     └── analysis.py           # Summary analysis and visuals
 ```
 > This project uses `dash`, `dash-bootstrap-components`, `dash-leaflet`, `pandas`, `psycopg2`, `SQLAlchemy`, and `gunicorn`.
