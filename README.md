@@ -27,6 +27,8 @@ zev-dashboard/
 └── pages/
     ├── overview.py           # Landing page
     ├── fleet_info.py         # Fleet map and details
+    ├── vehicle_info.py       # Vehicle details (Keep for possible extension)
+    ├── charger_info.py       # Charger details (Keep for possible extension)
     ├── charging.py           # Charger usage and types
     ├── telematics.py         # Telematics and trip summaries
     ├── veh_daily_usage.py    # Daily usage per vehicle
