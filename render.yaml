@@ -3,6 +3,6 @@ services:
     name: zev-dashboard
     env: python
     plan: free
-    buildCommand: ""
+    buildCommand: "pip install -r requirements.txt"
     startCommand: gunicorn app:server
     autoDeploy: true
