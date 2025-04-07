@@ -13,6 +13,7 @@ The app is publicly accessible and supports interactive maps, real-time queries,
 ---
 ## Project Structured
 
+```text
 zev-dashboard/
 ├── app.py              # Entry point for Dash multi-page app
 ├── db.py               # Database connection and query functions
@@ -30,7 +31,7 @@ zev-dashboard/
     ├── telematics.py         # Telematics and trip summaries
     ├── veh_daily_usage.py    # Daily usage per vehicle
     └── analysis.py           # Summary analysis and visuals
-
+```
 > This project uses `dash`, `dash-bootstrap-components`, `dash-leaflet`, `pandas`, `psycopg2`, `SQLAlchemy`, and `gunicorn`.
 
 ---
