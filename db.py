@@ -1,8 +1,11 @@
 from sqlalchemy import create_engine
+from dotenv import load_dotenv
 import pandas as pd
 import os
 
-db_url = os.getenv("DATABASE_URL", "postgresql://postgres:25472@localhost:5432/zev_performance")
+load_dotenv()
+# db_url = os.getenv("DATABASE_URL", "postgresql://postgres:25472@localhost:5432/zev_performance")
+db_url = os.getenv("DATABASE_URL")
 engine = create_engine(db_url)
 
 def get_fleet_data():
