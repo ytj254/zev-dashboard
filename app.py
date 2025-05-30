@@ -1,7 +1,7 @@
 from dash import Dash, html, page_container
 import dash_bootstrap_components as dbc
 
-app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.BOOTSTRAP])
+app = Dash(__name__, use_pages=True, external_stylesheets=[dbc.themes.DARKLY])
 server = app.server  # This is what gunicorn needs
 
 nav_items = [

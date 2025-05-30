@@ -42,9 +42,13 @@ markers = [
 
 layout = dbc.Row([
     dbc.Col([
-        html.H4("Fleet Details"),
+        html.H4("Fleet Details", className="fw-bold"),
         html.Div("Click a marker to view fleet information.", id="fleet-detail")
-    ], width=3, style={"padding": "1rem", "height": "90vh", "overflowY": "auto", "background": "#f8f9fa"}),
+    ], width=3, className="bg-dark text-white", style={
+        "padding": "1rem",
+        "height": "90vh",
+        "overflowY": "auto"
+    }),
 
     dbc.Col([
         dl.Map(children=[
@@ -80,7 +84,7 @@ def update_fleet_info(n_clicks):
         dbc.CardHeader(html.H4(fleet_row["fleet_name"], className="mb-0")),
 
         dbc.CardBody([
-            html.H6("Fleet Summary", className="text-primary mt-2"),
+            html.H6("Fleet Summary", style={"fontWeight": "bold", "marginTop": "1rem"}),
             html.P(f"Fleet size: {format_if_notna(fleet_row['fleet_size'])}", className="mb-1"),
             html.P(f"ZEVs total: {format_if_notna(fleet_row['zev_tot'])}", className="mb-1"),
             html.P(f"ZEVs grant: {format_if_notna(fleet_row['zev_grant'])}", className="mb-1"),
@@ -90,7 +94,7 @@ def update_fleet_info(n_clicks):
 
             html.Hr(),
 
-            html.H6("Vehicle Details", className="text-primary"),
+            html.H6("Vehicle Details", style={"fontWeight": "bold", "marginTop": "1rem"}),
             html.P(f"Total vehicles: {len(df_veh_sub)}", className="mb-2"),
             dbc.ListGroup([
                 dbc.ListGroupItem(f"{make} {model} {year} – {count} vehicle(s)")
@@ -99,7 +103,7 @@ def update_fleet_info(n_clicks):
 
             html.Hr(),
 
-            html.H6("Charger Details", className="text-primary"),
+            html.H6("Charger Details", style={"fontWeight": "bold", "marginTop": "1rem"}),
             html.P(f"Total chargers: {len(df_charger_sub)}", className="mb-2"),
             dbc.ListGroup([
                 dbc.ListGroupItem(f"{charger_type_label} / {connector_type_label} – {count} charger(s)")
