@@ -53,9 +53,9 @@ zev-dashboard/
 ssh -i your-key.pem ubuntu@your-ec2-ip
 
 # Pull new code and restart the server
+source venv-zev/bin/activate
 cd ~/zev-dashboard
 git pull origin main
-source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt  # Optional
 sudo systemctl restart zev
 ```
