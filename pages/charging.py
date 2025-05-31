@@ -3,7 +3,9 @@ import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
 from db import engine
-from utils import charger_type_map, empty_fig
+from utils import charger_type_map
+from styles import DROPDOWN_STYLE, DARK_BG, GRID_COLOR, TEXT_COLOR, empty_fig
+
 
 register_page(__name__, path="/charging")
 
@@ -55,17 +57,9 @@ layout = html.Div([
     ),
     
     html.Div([
-        dcc.Dropdown(id="fleet-filter", placeholder="Select Fleet", multi=True,
-                     style={"width": "250px", "color": "black", "backgroundColor": "white"}),
-        dcc.Dropdown(id="charger-filter", placeholder="Select Charger Type", multi=True,
-                     style={"width": "250px", "color": "black", "backgroundColor": "white"}),
-        dcc.DatePickerRange(
-            id='date-filter',
-            start_date_placeholder_text="Start Date",
-            end_date_placeholder_text="End Date",
-            display_format='YYYY-MM-DD',
-            style={"backgroundColor": "white", "color": "black"}
-        ),
+        dcc.Dropdown(id="fleet-filter", placeholder="Select Fleet", style=DROPDOWN_STYLE),
+        dcc.Dropdown(id="charger-filter", placeholder="Select Charger Type", style=DROPDOWN_STYLE),
+        dcc.DatePickerRange(id='date-range-picker'),
     ], style={'display': 'flex', 'flexWrap': 'wrap', 'gap': '10px', 'margin': '30px 0 20px 0'}),
 
     dbc.Row([
@@ -121,6 +115,26 @@ def update_summary(_):
 
     return kpi1, kpi2, kpi3, kpi4, data, columns
 
+# === Dropdown Options Callbacks ===
+
+@callback(
+    Output("fleet-filter", "options"),
+    Input("fleet-filter", "id")
+)
+def populate_fleet_options(_):
+    df = load_charging_data()
+    fleets = sorted(df["fleet_name"].dropna().unique())
+    return [{"label": f, "value": f} for f in fleets]
+
+@callback(
+    Output("charger-filter", "options"),
+    Input("charger-filter", "id")
+)
+def populate_charger_options(_):
+    df = load_charging_data()
+    types = sorted(df["charger_type"].dropna().unique())
+    return [{"label": t, "value": t} for t in types]
+
 # === Figure Update Callback ===
 @callback(
     Output("fig-power", "figure"),
@@ -129,8 +143,8 @@ def update_summary(_):
     Output("fig-conn-time", "figure"),
     Input("fleet-filter", "value"),
     Input("charger-filter", "value"),
-    Input("date-filter", "start_date"),
-    Input("date-filter", "end_date")
+    Input("date-range-picker", "start_date"),
+    Input("date-range-picker", "end_date")
 )
 def update_figures(fleet_val, charger_val, start_date, end_date):
     df = load_charging_data()
@@ -142,9 +156,9 @@ def update_figures(fleet_val, charger_val, start_date, end_date):
         df = df[df["date"].between(earliest, latest)]
         
     if fleet_val:
-        df = df[df["fleet_name"].isin(fleet_val)]
+        df = df[df["fleet_name"] == fleet_val]
     if charger_val:
-        df = df[df["charger_type"].isin(charger_val)]
+        df = df[df["charger_type"] == charger_val]
     if start_date:
         df = df[df["date"] >= pd.to_datetime(start_date).date()]
     if end_date:
@@ -180,11 +194,11 @@ def update_figures(fleet_val, charger_val, start_date, end_date):
     for fig in [fig1, fig2, fig3, fig4]:
         fig.update_layout(
             yaxis_title=None,
-            plot_bgcolor="#303030",
-            paper_bgcolor="#303030",
-            font_color="#FFFFFF",
-            xaxis=dict(gridcolor="#444444"),
-            yaxis=dict(gridcolor="#444444")
+            plot_bgcolor=DARK_BG,
+            paper_bgcolor=DARK_BG,
+            font_color=TEXT_COLOR,
+            xaxis=dict(gridcolor=GRID_COLOR),
+            yaxis=dict(gridcolor=GRID_COLOR)
         )
 
     return fig1, fig2, fig3, fig4

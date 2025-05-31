@@ -1,15 +1,11 @@
-from dash import register_page, html, dcc, dash_table, Input, Output, callback
+from dash import register_page, html, dcc, dash_table, Input, Output, callback, State
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
 from db import engine
-from utils import empty_fig
+from styles import DROPDOWN_STYLE, DARK_BG, GRID_COLOR, TEXT_COLOR, empty_fig
 
 register_page(__name__, path="/veh_daily_usage")
-
-DARK_BG = "#303030"
-TEXT_COLOR = "white"
-BAR_COLOR = "#5bc0de"
 
 metric_options = [
     {'label': 'Total Distance (mi)', 'value': 'tot_dist'},
@@ -21,11 +17,9 @@ metric_options = [
     {'label': 'Peak Payload (lbs)', 'value': 'peak_payload'},
 ]
 
-DROPDOWN_STYLE = {"width": "250px", "color": "black", "backgroundColor": "white"}
-
 def load_daily_usage_data():
     query = """
-        SELECT f.fleet_name AS fleet, vd.*
+        SELECT f.fleet_name AS fleet, v.make, v.model, v.class, vd.*
         FROM veh_daily vd
         JOIN vehicle v ON vd.veh_id = v.fleet_vehicle_id
         JOIN fleet f ON v.fleet_id = f.id
@@ -35,6 +29,8 @@ def load_daily_usage_data():
     return df
 
 layout = html.Div([
+    dcc.Store(id="daily-usage-store", data=load_daily_usage_data().to_dict("records")),
+    
     # KPI cards
     dbc.Row([
         dbc.Col(dbc.Card(dbc.CardBody([html.H6("Total Distance (mi)"), html.H4(id="kpi-total-distance")]))),
@@ -72,32 +68,36 @@ layout = html.Div([
     ])
 ])
 
-@callback(Output('fleet-dropdown', 'options'), Input('fleet-dropdown', 'id'))
-def load_fleet_options(_):
-    df = pd.read_sql("SELECT DISTINCT fleet_name FROM fleet", engine)
-    return [{'label': f, 'value': f} for f in df['fleet_name']]
+@callback(Output('daily-usage-store', 'data'), Input('daily-usage-graph', 'id'))
+def populate_store(_):
+    df = load_daily_usage_data()
+    return df.to_dict('records')
+
+@callback(Output('fleet-dropdown', 'options'), Input('daily-usage-store', 'data'))
+def load_fleet_options(records):
+    df = pd.DataFrame(records)
+    fleets = sorted(df["fleet"].dropna().unique())
+    return [{'label': f, 'value': f} for f in fleets]
 
 @callback(
     Output('make-dropdown', 'options'),
     Output('model-dropdown', 'options'),
     Output('vehicle-class-dropdown', 'options'),
     Output('fleet-veh-id-dropdown', 'options'),
-    Input('fleet-dropdown', 'value')
+    Input('fleet-dropdown', 'value'),
+    State('daily-usage-store', 'data')
 )
-def update_vehicle_filters(fleet_name):
-    if not fleet_name:
-        return [], [], [], []
-    query = """
-        SELECT DISTINCT v.make, v.model, v.class, v.fleet_vehicle_id
-        FROM vehicle v JOIN fleet f ON v.fleet_id = f.id
-        WHERE f.fleet_name = %s
-    """
-    df = pd.read_sql(query, engine, params=(fleet_name,))
+
+def update_filters(fleets, records):
+    df = pd.DataFrame(records)
+    if fleets:
+        df = df[df["fleet"] == fleets]
+
     return (
-        [{'label': m, 'value': m} for m in df['make'].dropna().unique()],
-        [{'label': m, 'value': m} for m in df['model'].dropna().unique()],
-        [{'label': c, 'value': c} for c in df['class'].dropna().unique()],
-        [{'label': i, 'value': i} for i in df['fleet_vehicle_id'].dropna().unique()],
+        [{'label': x, 'value': x} for x in sorted(df['make'].dropna().unique())],
+        [{'label': x, 'value': x} for x in sorted(df['model'].dropna().unique())],
+        [{'label': x, 'value': x} for x in sorted(df['class'].dropna().unique())],
+        [{'label': x, 'value': x} for x in sorted(df['veh_id'].dropna().unique())],
     )
 
 @callback(
@@ -109,21 +109,21 @@ def update_vehicle_filters(fleet_name):
     Input('fleet-veh-id-dropdown', 'value'),
     Input('date-range-picker', 'start_date'),
     Input('date-range-picker', 'end_date'),
-    Input('metric-dropdown', 'value')
+    Input('metric-dropdown', 'value'),
+    State('daily-usage-store', 'data')
 )
-def update_daily_usage(fleet, make, model, vehicle_class, fleet_vehicle_id, start_date, end_date, metric):
-    df = load_daily_usage_data()
-    if metric is None or df.empty:
-        return empty_fig("Please select a metric")
 
-    filters = []
-    if fleet: df = df[df["fleet"] == fleet]
-    if make: df = df[df["make"] == make]
-    if model: df = df[df["model"] == model]
-    if vehicle_class: df = df[df["class"] == vehicle_class]
-    if fleet_vehicle_id: df = df[df["veh_id"] == fleet_vehicle_id]
-    if start_date: df = df[df["date"] >= pd.to_datetime(start_date)]
-    if end_date: df = df[df["date"] <= pd.to_datetime(end_date)]
+def update_figure(fleets, makes, models, classes, veh_ids, start_date, end_date, metric, records):
+    df = pd.DataFrame(records)
+    df["date"] = pd.to_datetime(df["date"]).dt.date  # Ensure proper type
+
+    if fleets: df = df[df["fleet"] == fleets]
+    if makes: df = df[df["make"] == makes]
+    if models: df = df[df["model"] == models]
+    if classes: df = df[df["class"] == classes]
+    if veh_ids: df = df[df["veh_id"] == veh_ids]
+    if start_date: df = df[df["date"] >= pd.to_datetime(start_date).date()]
+    if end_date: df = df[df["date"] <= pd.to_datetime(end_date).date()]
 
     if df.empty or metric not in df.columns:
         return empty_fig("No data available")
@@ -136,8 +136,8 @@ def update_daily_usage(fleet, make, model, vehicle_class, fleet_vehicle_id, star
         paper_bgcolor=DARK_BG,
         plot_bgcolor=DARK_BG,
         font_color=TEXT_COLOR,
-        xaxis=dict(gridcolor="#444444"),
-        yaxis=dict(gridcolor="#444444")
+        xaxis=dict(gridcolor=GRID_COLOR),
+        yaxis=dict(gridcolor=GRID_COLOR)
     )
     return fig
 
@@ -149,41 +149,35 @@ def update_daily_usage(fleet, make, model, vehicle_class, fleet_vehicle_id, star
     Output("kpi-daily-soc", "children"),
     Output("fleet-summary-table", "data"),
     Output("fleet-summary-table", "columns"),
-    Input("fleet-summary-table", "id")
+    Input("fleet-summary-table", "id"),
+    State("daily-usage-store", "data")   # <-- Add this line
 )
-def update_summary_table_and_kpis(_):
-    df = load_daily_usage_data()
+
+def update_kpis_and_table(_, records):
+    df = pd.DataFrame(records)
     if df.empty:
         return "0", "0", "0", "0", "0", [], []
 
     summary = []
     for fleet_name, group in df.groupby("fleet"):
-        total_distance = group["tot_dist"].sum()
-        avg_distance = group[group["tot_dist"] > 0]["tot_dist"].mean()
-        avg_energy = group[group["tot_energy"] > 0]["tot_energy"].mean()
-        avg_soc = group[group["tot_soc_used"] > 0]["tot_soc_used"].mean()
-        avg_drive = group[group["tot_dura"] > 0]["tot_dura"].mean()
-        avg_idle = group["idle_time"].mean()
-        avg_payload = group["peak_payload"].mean()
         summary.append({
             "Fleet": fleet_name,
-            "Total Distance (mi)": round(total_distance, 2),
-            "Daily Distance (mi)": round(avg_distance, 2),
-            "Daily Energy (kWh)": round(avg_energy, 2),
-            "Daily SOC Used (%)": round(avg_soc, 2),
-            "Daily Driving Time (hr)": round(avg_drive, 2),
-            "Daily Idle Time (hr)": round(avg_idle, 2),
-            "Daily Payload (lbs)": round(avg_payload, 2),
+            "Total Distance (mi)": round(group["tot_dist"].sum(), 2),
+            "Daily Distance (mi)": round(group[group["tot_dist"] > 0]["tot_dist"].mean(), 2),
+            "Daily Energy (kWh)": round(group[group["tot_energy"] > 0]["tot_energy"].mean(), 2),
+            "Daily SOC Used (%)": round(group[group["tot_soc_used"] > 0]["tot_soc_used"].mean(), 2),
+            "Daily Driving Time (hr)": round(group[group["tot_dura"] > 0]["tot_dura"].mean(), 2),
+            "Daily Idle Time (hr)": round(group["idle_time"].mean(), 2),
+            "Daily Payload (lbs)": round(group["peak_payload"].mean(), 2),
         })
 
     df_summary = pd.DataFrame(summary)
-    kpi1 = df_summary["Total Distance (mi)"].sum()
-    kpi2 = df_summary["Daily Distance (mi)"].mean()
-    kpi3 = df_summary["Daily Energy (kWh)"].mean()
-    kpi4 = df_summary["Daily Driving Time (hr)"].mean()
-    kpi5 = df_summary["Daily SOC Used (%)"].mean()
-    columns = [{"name": col, "id": col} for col in df_summary.columns]
     return (
-        f"{kpi1:.2f}", f"{kpi2:.2f}", f"{kpi3:.2f}", f"{kpi4:.2f}", f"{kpi5:.2f}",
-        df_summary.to_dict("records"), columns
+        f"{df_summary['Total Distance (mi)'].sum():.2f}",
+        f"{df_summary['Daily Distance (mi)'].mean():.2f}",
+        f"{df_summary['Daily Energy (kWh)'].mean():.2f}",
+        f"{df_summary['Daily Driving Time (hr)'].mean():.2f}",
+        f"{df_summary['Daily SOC Used (%)'].mean():.2f}",
+        df_summary.to_dict("records"),
+        [{"name": col, "id": col} for col in df_summary.columns]
     )
