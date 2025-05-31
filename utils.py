@@ -1,4 +1,7 @@
 import pandas as pd
+import plotly.graph_objects as go
+
+DARK_BG = "#303030"
 
 battery_chem_map = {
     1: "Lithium-Ion Batteries",
@@ -39,3 +42,12 @@ def format_if_notna(value, placeholder="N/A"):
         return value
     else:
         return placeholder
+
+def empty_fig(text="No data available"):
+    return go.Figure(layout=go.Layout(
+        paper_bgcolor=DARK_BG, plot_bgcolor=DARK_BG,
+        xaxis=dict(visible=False), yaxis=dict(visible=False),
+        annotations=[dict(text=text, x=0.5, y=0.5, showarrow=False,
+                          font=dict(color="white", size=16), xref="paper", yref="paper")],
+        font=dict(color="white")
+    ))
