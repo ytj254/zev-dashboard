@@ -1,10 +1,20 @@
-from dash import register_page, html, Output, Input, callback, ALL
+from dash import register_page, html, Output, Input, callback, ALL, dash_table
 import dash_leaflet as dl
 import dash_bootstrap_components as dbc
 from dash import ctx
 from db import get_fleet_data, get_veh_data, get_charger_data
 from utils import format_if_notna, battery_chem_map, charger_type_map, connector_type_map, map_multi_labels
 import json
+
+
+columns=[
+    {"name": "Fleet Name", "id": "fleet_name"},
+    {"name": "Fleet Size", "id": "fleet_size"},
+    {"name": "Granted ZEVs", "id": "zev_grant"},
+    {"name": "Granted Chargers", "id": "charger_grant"},
+    {"name": "Depot Address", "id": "depot_adr"},
+    {"name": "Vendor", "id": "vendor_name"},
+]
 
 register_page(__name__, path="/fleet_info")
 
@@ -41,6 +51,43 @@ markers = [
 ]
 
 layout = dbc.Row([
+    # KPI Cards
+    dbc.Row([
+        dbc.Col(dbc.Card(dbc.CardBody([
+            html.H6("Total Fleets", className="card-title"),
+            html.H4(str(len(df_fleet)), className="card-text")
+        ]))),
+        dbc.Col(dbc.Card(dbc.CardBody([
+            html.H6("Granted ZEVs", className="card-title"),
+            html.H4(str(int(df_fleet["zev_grant"].fillna(0).sum())), className="card-text")
+        ]))),
+        dbc.Col(dbc.Card(dbc.CardBody([
+            html.H6("Total Chargers", className="card-title"),
+            html.H4(str(len(df_charger)), className="card-text")
+        ]))),
+    ], className="mb-4"),
+
+    # Summary Table
+    html.Div([
+        html.H4("Fleet Summary Table"),
+        dash_table.DataTable(
+            columns=[
+                {"name": "Fleet Name", "id": "fleet_name"},
+                {"name": "Fleet Size", "id": "fleet_size"},
+                {"name": "Granted ZEVs", "id": "zev_grant"},
+                {"name": "Granted Chargers", "id": "charger_grant"},
+                {"name": "Vendor", "id": "vendor_name"},
+                {"name": "Depot Address", "id": "depot_adr"},
+            ],
+            data=df_fleet[[
+                "fleet_name", "fleet_size", "zev_grant", "charger_grant", "vendor_name", "depot_adr"
+            ]].to_dict("records"),
+            style_table={'overflowX': 'auto'},
+            style_cell={'color': 'white', 'backgroundColor': '#303030'},
+            style_header={'backgroundColor': '#1f1f1f', 'color': 'white', 'fontWeight': 'bold'}
+        )
+    ], style={"marginBottom": "2rem"}),
+
     dbc.Col([
         html.H4("Fleet Details", className="fw-bold"),
         html.Div("Click a marker to view fleet information.", id="fleet-detail")
