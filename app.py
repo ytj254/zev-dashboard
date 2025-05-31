@@ -9,10 +9,10 @@ nav_items = [
     dbc.NavItem(dbc.NavLink("FLEET", href="/fleet_info", active="exact")),
     # dbc.NavItem(dbc.NavLink("VEHICLE", href="/vehicle_infor", active="exact")),
     # dbc.NavItem(dbc.NavLink("CHARGER", href="/charger_info", active="exact")),
-    dbc.NavItem(dbc.NavLink("MAINTENANCE", href="/maintenance", active="exact")),
-    dbc.NavItem(dbc.NavLink("CHARGING", href="/charging", active="exact")),
-    dbc.NavItem(dbc.NavLink("TELEMATICS", href="/telematics", active="exact")),
     dbc.NavItem(dbc.NavLink("DAILY USAGE", href="/veh_daily_usage", active="exact")),
+    dbc.NavItem(dbc.NavLink("TELEMATICS", href="/telematics", active="exact")),
+    dbc.NavItem(dbc.NavLink("CHARGING", href="/charging", active="exact")),
+    dbc.NavItem(dbc.NavLink("MAINTENANCE", href="/maintenance", active="exact")),
     dbc.NavItem(dbc.NavLink("ANALYSIS", href="/analysis", active="exact")),
 ]
 
