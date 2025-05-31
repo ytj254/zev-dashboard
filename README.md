@@ -8,7 +8,7 @@ This project is a web-based dashboard for exploring fleet data related to zero-e
 - **Hosting**: Self-hosted on AWS EC2 with Ubuntu
 - **Web Server**: Gunicorn + Nginx
 - **Startup**: Managed via systemd (`zev.service`)
-- **Domain**: Accessed via public IP (or mapped via optional DuckDNS/Freenom)
+- **Domain**: https://pazevperf.dedyn.io (via deSEC DNS)
 - **Database**: PostgreSQL running on AWS RDS (with PostGIS enabled)
 
 The app is publicly accessible and supports interactive maps, real-time queries, and detailed fleet insights.
