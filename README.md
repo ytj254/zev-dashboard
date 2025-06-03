@@ -23,7 +23,7 @@ zev-dashboard/
 ├── utils.py                  # Helper functions and mappings
 ├── styles.py                 # Centralized styling definitions for consistency
 ├── requirements.txt          # Python dependencies
-├── render.yaml               # (lagacy) Render deployment config
+├── render.yaml               # (legacy) Render deployment config.
 ├── .gitignore
 ├── README.md
 ├── assets/
