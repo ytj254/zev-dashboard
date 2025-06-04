@@ -14,7 +14,7 @@ This project is a web-based dashboard for exploring fleet data related to zero-e
 The app is publicly accessible and supports interactive maps, real-time queries, and detailed fleet insights.
 
 ---
-## Project Structured
+## Project Structure
 
 ```text
 zev-dashboard/
