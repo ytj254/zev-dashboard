@@ -1,5 +1,5 @@
 # Database Cheat Sheet — `zevperf`
-_Generated: 2025-08-08 16:58:21_  
+_Generated: 2025-08-08 17:01:36_  
 _Engine: PostgreSQL 17.5_
 
 ---
@@ -203,7 +203,7 @@ SELECT r.refuel_start, r.tot_energy, c.charger, f.fleet_name
 FROM refuel_inf r
 JOIN charger c ON r.charger_id = c.charger
 JOIN fleet   f ON c.fleet_id = f.id;
-
+```
 ---
 ## Operational Instructions
 

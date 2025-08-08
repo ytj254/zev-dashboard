@@ -146,7 +146,7 @@ SELECT r.refuel_start, r.tot_energy, c.charger, f.fleet_name
 FROM refuel_inf r
 JOIN charger c ON r.charger_id = c.charger
 JOIN fleet   f ON c.fleet_id = f.id;
-
+```
 ---
 ## Operational Instructions
 
