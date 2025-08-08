@@ -15,7 +15,7 @@ ins = inspect(engine)
 # 2) Helpers
 PUBLIC = "public"
 now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-out_path = "db_cheatsheet.md"
+out_path = r"data_update\db_cheatsheet.md"
 
 def pg_version(conn):
     return conn.execute(text("select version(), current_database()")).fetchone()

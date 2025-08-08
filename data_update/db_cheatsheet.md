@@ -1,5 +1,5 @@
 # Database Cheat Sheet — `zevperf`
-_Generated: 2025-08-08 16:30:03_  
+_Generated: 2025-08-08 16:34:23_  
 _Engine: PostgreSQL 17.5_
 
 ---
