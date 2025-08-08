@@ -152,3 +152,4 @@ JOIN fleet   f ON c.fleet_id = f.id;
 content = "\n".join(md)
 with open(out_path, "w", encoding="utf-8") as f:
     f.write(content)
+print(f"[done] Wrote Markdown to: {out_path}")
