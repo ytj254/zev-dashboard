@@ -156,7 +156,7 @@ JOIN fleet   f ON c.fleet_id = f.id;
 
 2. **Run scripts to interact with the database**
    - Example: `python aws/gen_db_cheatsheet.py` to update this cheat sheet.
-   - Example: `python aws/upload_data.py` to insert/update data.
+   - Use scripts in `data_update` subfolder to upload data.
 
 3. **Close the tunnel**
    - When finished, close the SSH tunnel window or press `Ctrl+C` inside it.
