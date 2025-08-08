@@ -146,6 +146,20 @@ SELECT r.refuel_start, r.tot_energy, c.charger, f.fleet_name
 FROM refuel_inf r
 JOIN charger c ON r.charger_id = c.charger
 JOIN fleet   f ON c.fleet_id = f.id;
+
+---
+## Operational Instructions
+
+1. **Start the SSH tunnel to RDS**
+   - Double-click `start-tunnel.bat` (in the `aws` folder).
+   - Keep this window open while you work; it maintains the tunnel to the database.
+
+2. **Run scripts to interact with the database**
+   - Example: `python aws/gen_db_cheatsheet.py` to update this cheat sheet.
+   - Example: `python aws/upload_data.py` to insert/update data.
+
+3. **Close the tunnel**
+   - When finished, close the SSH tunnel window or press `Ctrl+C` inside it.
 """)
 
 # 5) WRITE THE FILE
