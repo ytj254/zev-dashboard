@@ -1,5 +1,5 @@
 # Database Cheat Sheet — `zevperf`
-_Generated: 2025-08-08 17:01:36_  
+_Generated: 2025-08-09 16:58:54_  
 _Engine: PostgreSQL 17.5_
 
 ---
@@ -126,7 +126,7 @@ _Engine: PostgreSQL 17.5_
 
 **Columns**:
 - `id` integer NOT NULL DEFAULT nextval('veh_tel_id_seq'::regclass)
-- `veh_id` integer NOT NULL
+- `veh_id` character varying NOT NULL
 - `timestamp` timestamp with time zone
 - `elevation` numeric DEFAULT NULL::numeric
 - `speed` integer
@@ -138,7 +138,7 @@ _Engine: PostgreSQL 17.5_
 - `location` USER-DEFINED (PostGIS)
 
 **Foreign keys**:
-- FK (veh_id) → vehicle(id)
+- FK (veh_id) → vehicle(fleet_vehicle_id)
 
 ### `vehicle`
 **Primary key**: id
@@ -178,7 +178,7 @@ _Engine: PostgreSQL 17.5_
 - `refuel_inf`.charger_id → `charger`.charger
 - `refuel_inf`.veh_id → `vehicle`.fleet_vehicle_id
 - `veh_daily`.veh_id → `vehicle`.fleet_vehicle_id
-- `veh_tel`.veh_id → `vehicle`.id
+- `veh_tel`.veh_id → `vehicle`.fleet_vehicle_id
 - `vehicle`.fleet_id → `fleet`.id
 
 ---
