@@ -1,5 +1,5 @@
 # Database Cheat Sheet — `zevperf`
-_Generated: 2025-08-14 18:42:27_  
+_Generated: 2025-08-14 19:34:24_  
 _Engine: PostgreSQL 17.5_
 
 ---
@@ -55,9 +55,9 @@ _Engine: PostgreSQL 17.5_
 - `exit_shop` timestamp
 - `enter_odo` integer
 - `exit_odo` integer
-- `parts_cost` numeric DEFAULT NULL::numeric
-- `labor_cost` numeric DEFAULT NULL::numeric
-- `add_cost` numeric DEFAULT NULL::numeric
+- `parts_cost` numeric
+- `labor_cost` numeric
+- `add_cost` numeric
 - `warranty` boolean
 - `fleet_id` integer NOT NULL
 - `charger_id` integer
@@ -77,11 +77,11 @@ _Engine: PostgreSQL 17.5_
 - `disconnect_time` timestamp
 - `refuel_start` timestamp
 - `refuel_end` timestamp
-- `avg_power` numeric
-- `max_power` numeric
-- `tot_energy` numeric
-- `start_soc` numeric DEFAULT NULL::numeric
-- `end_soc` numeric DEFAULT NULL::numeric
+- `avg_power` double precision
+- `max_power` double precision
+- `tot_energy` double precision
+- `start_soc` double precision
+- `end_soc` double precision
 - `veh_id` integer NOT NULL
 - `charger_id` integer NOT NULL
 
@@ -108,13 +108,13 @@ _Engine: PostgreSQL 17.5_
 - `trip_num` integer
 - `init_odo` double precision
 - `final_odo` double precision
-- `tot_dist` numeric
-- `tot_dura` numeric
-- `idle_time` integer
-- `init_soc` numeric DEFAULT NULL::numeric
-- `final_soc` numeric DEFAULT NULL::numeric
-- `tot_soc_used` numeric DEFAULT NULL::numeric
-- `tot_energy` integer
+- `tot_dist` double precision
+- `tot_dura` double precision
+- `idle_time` double precision
+- `init_soc` double precision
+- `final_soc` double precision
+- `tot_soc_used` double precision
+- `tot_energy` double precision
 - `peak_payload` integer
 - `veh_id` integer NOT NULL
 
@@ -130,11 +130,11 @@ _Engine: PostgreSQL 17.5_
 **Columns**:
 - `id` integer NOT NULL DEFAULT nextval('veh_tel_id_seq'::regclass)
 - `timestamp` timestamp with time zone
-- `elevation` numeric DEFAULT NULL::numeric
-- `speed` integer
-- `mileage` integer
-- `soc` numeric DEFAULT NULL::numeric
-- `key_on_time` numeric DEFAULT NULL::numeric
+- `elevation` double precision
+- `speed` double precision
+- `mileage` double precision
+- `soc` double precision
+- `key_on_time` double precision
 - `latitude` double precision
 - `longitude` double precision
 - `location` USER-DEFINED (PostGIS)
@@ -161,7 +161,7 @@ _Engine: PostgreSQL 17.5_
 - `gross_wt` integer
 - `rated_cap` integer
 - `nominal_range` integer
-- `nominal_eff` numeric DEFAULT NULL::numeric
+- `nominal_eff` double precision
 - `battery_chem` integer
 - `peak_power` integer
 - `peak_torque` integer
