@@ -1,5 +1,5 @@
 # Database Cheat Sheet — `zevperf`
-_Generated: 2025-08-09 16:58:54_  
+_Generated: 2025-08-14 18:42:27_  
 _Engine: PostgreSQL 17.5_
 
 ---
@@ -19,7 +19,7 @@ _Engine: PostgreSQL 17.5_
 - `dedicated_use` boolean
 
 **Uniques**:
-- UNIQUE(charger)
+- UNIQUE(fleet_id, charger)
 
 **Foreign keys**:
 - FK (fleet_id) → fleet(id)
@@ -73,8 +73,6 @@ _Engine: PostgreSQL 17.5_
 
 **Columns**:
 - `id` integer NOT NULL DEFAULT nextval('refuel_inf_id_seq'::regclass)
-- `charger_id` character varying NOT NULL
-- `veh_id` character varying
 - `connect_time` timestamp
 - `disconnect_time` timestamp
 - `refuel_start` timestamp
@@ -84,10 +82,12 @@ _Engine: PostgreSQL 17.5_
 - `tot_energy` numeric
 - `start_soc` numeric DEFAULT NULL::numeric
 - `end_soc` numeric DEFAULT NULL::numeric
+- `veh_id` integer NOT NULL
+- `charger_id` integer NOT NULL
 
 **Foreign keys**:
-- FK (charger_id) → charger(charger)
-- FK (veh_id) → vehicle(fleet_vehicle_id)
+- FK (charger_id) → charger(id)
+- FK (veh_id) → vehicle(id)
 
 ### `spatial_ref_sys`
 **Primary key**: srid
@@ -104,11 +104,10 @@ _Engine: PostgreSQL 17.5_
 
 **Columns**:
 - `id` integer NOT NULL DEFAULT nextval('veh_daily_id_seq'::regclass)
-- `veh_id` character varying NOT NULL
 - `date` date
 - `trip_num` integer
-- `init_odo` integer
-- `final_odo` integer
+- `init_odo` double precision
+- `final_odo` double precision
 - `tot_dist` numeric
 - `tot_dura` numeric
 - `idle_time` integer
@@ -117,16 +116,19 @@ _Engine: PostgreSQL 17.5_
 - `tot_soc_used` numeric DEFAULT NULL::numeric
 - `tot_energy` integer
 - `peak_payload` integer
+- `veh_id` integer NOT NULL
+
+**Uniques**:
+- UNIQUE(veh_id, date)
 
 **Foreign keys**:
-- FK (veh_id) → vehicle(fleet_vehicle_id)
+- FK (veh_id) → vehicle(id)
 
 ### `veh_tel`
 **Primary key**: id
 
 **Columns**:
 - `id` integer NOT NULL DEFAULT nextval('veh_tel_id_seq'::regclass)
-- `veh_id` character varying NOT NULL
 - `timestamp` timestamp with time zone
 - `elevation` numeric DEFAULT NULL::numeric
 - `speed` integer
@@ -136,9 +138,13 @@ _Engine: PostgreSQL 17.5_
 - `latitude` double precision
 - `longitude` double precision
 - `location` USER-DEFINED (PostGIS)
+- `veh_id` integer NOT NULL
+
+**Uniques**:
+- UNIQUE(veh_id, timestamp)
 
 **Foreign keys**:
-- FK (veh_id) → vehicle(fleet_vehicle_id)
+- FK (veh_id) → vehicle(id)
 
 ### `vehicle`
 **Primary key**: id
@@ -163,7 +169,7 @@ _Engine: PostgreSQL 17.5_
 - `vocation` character varying DEFAULT NULL::character varying
 
 **Uniques**:
-- UNIQUE(fleet_vehicle_id)
+- UNIQUE(fleet_id, fleet_vehicle_id)
 
 **Foreign keys**:
 - FK (fleet_id) → fleet(id)
@@ -175,10 +181,10 @@ _Engine: PostgreSQL 17.5_
 - `maintenance`.charger_id → `charger`.id
 - `maintenance`.fleet_id → `fleet`.id
 - `maintenance`.vehicle_id → `vehicle`.id
-- `refuel_inf`.charger_id → `charger`.charger
-- `refuel_inf`.veh_id → `vehicle`.fleet_vehicle_id
-- `veh_daily`.veh_id → `vehicle`.fleet_vehicle_id
-- `veh_tel`.veh_id → `vehicle`.fleet_vehicle_id
+- `refuel_inf`.charger_id → `charger`.id
+- `refuel_inf`.veh_id → `vehicle`.id
+- `veh_daily`.veh_id → `vehicle`.id
+- `veh_tel`.veh_id → `vehicle`.id
 - `vehicle`.fleet_id → `fleet`.id
 
 ---
