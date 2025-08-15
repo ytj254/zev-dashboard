@@ -3,7 +3,7 @@ import dash_leaflet as dl
 import dash_bootstrap_components as dbc
 import pandas as pd
 from db import engine
-from styles import DROPDOWN_STYLE, DARK_BG, TEXT_COLOR, LIGHT_MAP
+from styles import DROPDOWN_STYLE, DARK_BG, TEXT_COLOR
 import json
 import plotly.express as px
 
@@ -72,7 +72,7 @@ layout = html.Div([
             dl.Map(
                 id="telematics-map",
                 children=[
-                    LIGHT_MAP,
+                    dl.TileLayer(),
                     pa_border,
                 ],
                 bounds=[[39.7198, -80.5199], [42.2695, -74.6895]],
@@ -193,4 +193,4 @@ def update_map_and_summary(fleet_name, vehicle_id, start_date, end_date):
         color = FLEET_COLORS.get(fleet, "gray")
         polylines.append(dl.Polyline(positions=coords, color=color, weight=3, opacity=0.9))
 
-    return [LIGHT_MAP, pa_border, *polylines], summary_table
+    return [dl.TileLayer(), pa_border, *polylines], summary_table
