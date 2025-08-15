@@ -19,9 +19,9 @@ metric_options = [
 
 def load_daily_usage_data():
     query = """
-        SELECT f.fleet_name AS fleet, v.make, v.model, v.class, vd.*
+        SELECT f.fleet_name AS fleet, v.make, v.model, v.class, v.fleet_vehicle_id, vd.*
         FROM veh_daily vd
-        JOIN vehicle v ON vd.veh_id = v.fleet_vehicle_id
+        JOIN vehicle v ON vd.veh_id = v.id
         JOIN fleet f ON v.fleet_id = f.id
     """
     df = pd.read_sql(query, engine)
@@ -97,7 +97,7 @@ def update_filters(fleets, records):
         [{'label': x, 'value': x} for x in sorted(df['make'].dropna().unique())],
         [{'label': x, 'value': x} for x in sorted(df['model'].dropna().unique())],
         [{'label': x, 'value': x} for x in sorted(df['class'].dropna().unique())],
-        [{'label': x, 'value': x} for x in sorted(df['veh_id'].dropna().unique())],
+        [{'label': x, 'value': x} for x in sorted(df['fleet_vehicle_id'].dropna().unique())],
     )
 
 @callback(
@@ -121,7 +121,7 @@ def update_figure(fleets, makes, models, classes, veh_ids, start_date, end_date,
     if makes: df = df[df["make"] == makes]
     if models: df = df[df["model"] == models]
     if classes: df = df[df["class"] == classes]
-    if veh_ids: df = df[df["veh_id"] == veh_ids]
+    if veh_ids: df = df[df["fleet_vehicle_id"] == veh_ids]
     if start_date: df = df[df["date"] >= pd.to_datetime(start_date).date()]
     if end_date: df = df[df["date"] <= pd.to_datetime(end_date).date()]
 

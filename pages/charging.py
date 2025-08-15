@@ -13,7 +13,7 @@ def load_charging_data():
     query = """
         SELECT r.*, c.charger_type, f.fleet_name
         FROM refuel_inf r
-        JOIN charger c ON r.charger_id = c.charger
+        JOIN charger c ON r.charger_id = c.id
         JOIN fleet f ON c.fleet_id = f.id
     """
     df = pd.read_sql(query, engine)
