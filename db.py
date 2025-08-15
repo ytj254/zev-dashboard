@@ -6,6 +6,8 @@ import os
 load_dotenv()
 # db_url = os.getenv("DATABASE_URL", "postgresql://postgres:25472@localhost:5432/zev_performance")
 db_url = os.getenv("DATABASE_URL")
+if not db_url:
+    raise ValueError("DATABASE_URL is not set in .env")
 engine = create_engine(db_url)
 
 def get_fleet_data():

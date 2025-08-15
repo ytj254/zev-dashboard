@@ -50,7 +50,7 @@ layout = html.Div([
 
     html.H4("Charging Events Summary by Fleet and Charger Type"),
     dash_table.DataTable(
-        id='summary-table',
+        id='summary-table-charging',
         style_table={'overflowX': 'auto'},
         style_cell={'color': 'white', 'backgroundColor': '#303030'},
         style_header={'backgroundColor': '#1f1f1f', 'color': 'white', 'fontWeight': 'bold'}
@@ -78,9 +78,9 @@ layout = html.Div([
     Output("kpi-avg-energy", "children"),
     Output("kpi-avg-chg-time", "children"),
     Output("kpi-avg-conn-time", "children"),
-    Output("summary-table", "data"),
-    Output("summary-table", "columns"),
-    Input("summary-table", "id")  # dummy input to trigger once
+    Output("summary-table-charging", "data"),
+    Output("summary-table-charging", "columns"),
+    Input("summary-table-charging", "id")  # dummy input to trigger once
 )
 def update_summary(_):
     df = load_charging_data()

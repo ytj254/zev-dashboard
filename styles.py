@@ -1,5 +1,6 @@
 # styles.py
 import plotly.graph_objects as go
+import dash_leaflet as dl
 
 DROPDOWN_STYLE = {
     "width": "250px",
@@ -25,3 +26,8 @@ def empty_fig(text="No data available"):
                           font=dict(color="white", size=16), xref="paper", yref="paper")],
         font=dict(color="white")
     ))
+    
+LIGHT_MAP = dl.TileLayer(
+    url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+    attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors &copy; <a href="https://www.carto.com/">CARTO</a>'
+)
