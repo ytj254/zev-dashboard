@@ -17,23 +17,28 @@ def upsert_tel(conn, veh_id_int: int, df: pd.DataFrame, veh_label: str) -> tuple
     rows = []
     warns = 0
     for _, r in df.iterrows():
-        ts = r.get("timeStamp")
+        ts = pd.to_datetime(r.get("timeStamp"), errors="coerce", utc=True)  # consistent datetime parsing
         if pd.isna(ts):
             warns += 1
-        lat = r.get("latitude")
-        lon = r.get("longitude")
+            
+        # Numeric conversions — only if needed
+        speed = pd.to_numeric(r.get("speed"), errors="coerce")
+        odometer = pd.to_numeric(r.get("odometer"), errors="coerce")
+        lat = pd.to_numeric(r.get("latitude"), errors="coerce")
+        lon = pd.to_numeric(r.get("longitude"), errors="coerce")
 
         rows.append((
             veh_id_int,
-            pd.to_datetime(ts, errors="coerce"),
+            ts,
             None,  # elevation (unknown)
-            int(r["speed"]) if pd.notna(r.get("speed")) else None,
-            int(r["odometer"]) if pd.notna(r.get("odometer")) else None,
-            r.get("stateOfCharge"),
-            r.get("keyOnTime"),
-            float(lat) if pd.notna(lat) else None,
-            float(lon) if pd.notna(lon) else None
+            speed if pd.notna(speed) else None,
+            odometer if pd.notna(odometer) else None,
+            r.get("stateOfCharge"),  # already normalized before
+            pd.to_numeric(r.get("keyOnTime"), errors="coerce") if pd.notna(r.get("keyOnTime")) else None,
+            lat if pd.notna(lat) else None,
+            lon if pd.notna(lon) else None
         ))
+        
     if warns:
         print(f"[WARN] {veh_label}: {warns} rows missing timestamp; inserted with NULL timestamp.")
 
@@ -92,7 +97,7 @@ def main():
 
     with get_conn() as conn:
         _, str2int = get_fleet_id_and_vehicle_maps(conn)
-        arc = ensure_archive(root)
+        # arc = ensure_archive(root)
         grand_rows = grand_warns = 0
 
         for folder in sorted(weekly_folders):
@@ -103,7 +108,7 @@ def main():
                     continue
                 rows, warns = load_csv_file(conn, csvf, str2int)
                 record_ingestion(conn, csvf, file_hash, rows)
-                move_to_archive(csvf, arc)
+                # move_to_archive(csvf, arc)
                 grand_rows += rows
                 grand_warns += warns
                 print(f"[OK] {csvf.name}: {rows} rows loaded; archived.")
