@@ -22,8 +22,8 @@ layout = html.Div([
         # Left Filters
         dbc.Col([
             html.H5("Filters"),
-            dcc.Dropdown(id="fleet-dropdown", placeholder="Select Fleet", style=DROPDOWN_STYLE),
-            dcc.Dropdown(id="vehicle-dropdown", placeholder="Select Vehicle", style=DROPDOWN_STYLE),
+            dcc.Dropdown(id="fleet-dropdown-telematics", placeholder="Select Fleet", style=DROPDOWN_STYLE),
+            dcc.Dropdown(id="vehicle-dropdown-telematics", placeholder="Select Vehicle", style=DROPDOWN_STYLE),
             dcc.DatePickerRange(id="date-picker", display_format="YYYY-MM-DD"),
             dbc.Checklist(
                 id="layer-toggle",
@@ -54,16 +54,16 @@ layout = html.Div([
 
 # ---------- Callbacks ----------
 @callback(
-    Output("fleet-dropdown", "options"),
-    Input("fleet-dropdown", "id")
+    Output("fleet-dropdown-telematics", "options"),
+    Input("fleet-dropdown-telematics", "id")
 )
 def load_fleet_options(_):
     df = pd.read_sql("SELECT fleet_name FROM fleet ORDER BY fleet_name", engine)
     return [{"label": f, "value": f} for f in df["fleet_name"]]
 
 @callback(
-    Output("vehicle-dropdown", "options"),
-    Input("fleet-dropdown", "value")
+    Output("vehicle-dropdown-telematics", "options"),
+    Input("fleet-dropdown-telematics", "value")
 )
 def load_vehicle_options(fleet_name):
     if not fleet_name:
@@ -86,8 +86,8 @@ def load_vehicle_options(fleet_name):
     Output("kpi-points", "children"),
     Output("telematics-map", "figure"),
     Output("telematics-timeseries", "figure"),
-    Input("fleet-dropdown", "value"),
-    Input("vehicle-dropdown", "value"),
+    Input("fleet-dropdown-telematics", "value"),
+    Input("vehicle-dropdown-telematics", "value"),
     Input("date-picker", "start_date"),
     Input("date-picker", "end_date"),
     Input("layer-toggle", "value")
