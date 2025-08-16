@@ -1,12 +1,8 @@
 import pandas as pd
-import os
-from sqlalchemy import create_engine
-from dotenv import load_dotenv
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+from data_update.common_data_update import engine
 
-# Load .env file (adjust path as needed)
-load_dotenv(dotenv_path=r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\zev-dashboard\aws\.env")
-db_url = os.getenv("DATABASE_URL")
-engine = create_engine(db_url)
 
 # Load Excel data
 excel_path = "D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors/EV Data Collection - Charging Event Data.xlsx"

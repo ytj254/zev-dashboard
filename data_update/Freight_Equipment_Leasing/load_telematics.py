@@ -1,6 +1,8 @@
 from pathlib import Path
 import pandas as pd
 import psycopg2.extras as _extras
+import sys, os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data_update.common_data_update import get_conn
 from common import (
     ROOT_DIR, FREIGHT_VEH_IDS, md5_file, already_ingested,
