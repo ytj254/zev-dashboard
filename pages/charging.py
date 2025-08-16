@@ -17,11 +17,17 @@ def load_charging_data():
         JOIN fleet f ON c.fleet_id = f.id
     """
     df = pd.read_sql(query, engine)
+    
     df["start_soc"] = df["start_soc"] * 100
     df["end_soc"] = df["end_soc"] * 100
     df["soc_gain"] = df["end_soc"] - df["start_soc"]
-    df["charging_duration"] = (df["refuel_end"] - df["refuel_start"]).dt.total_seconds() / 60
+    
+    # --- Charging duration: prefer tot_ref_dura, fallback to refuel_start/end
+    duration_from_times = (df["refuel_end"] - df["refuel_start"]).dt.total_seconds() / 60
+    df["charging_duration"] = df["tot_ref_dura"].fillna(duration_from_times)
+    
     df["connecting_duration"] = (df["disconnect_time"] - df["connect_time"]).dt.total_seconds() / 60
+    
     df["charger_type"] = df["charger_type"].map(charger_type_map).fillna(df["charger_type"])
     df["date"] = pd.to_datetime(df["connect_time"]).dt.date
     return df
