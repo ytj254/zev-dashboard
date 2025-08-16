@@ -15,14 +15,7 @@ ROOT_DIR = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming flee
 ARCHIVE_SUB = "_archive"
 LOG_FILE = Path(__file__).parent / "_ingestion_log.json"
 
-# Load .env from your absolute path
-load_dotenv(dotenv_path=r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\zev-dashboard\aws\.env")
-DATABASE_URL = os.getenv("DATABASE_URL")
-
 DATEFOLDER_RE = re.compile(r"^\d{8}$")  # YYYYMMDD
-
-def get_conn():
-    return psycopg2.connect(DATABASE_URL)
 
 def md5_file(p: Path) -> str:
     h = hashlib.md5()

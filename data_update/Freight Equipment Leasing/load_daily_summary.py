@@ -1,10 +1,10 @@
 from pathlib import Path
 import pandas as pd
 import psycopg2.extras as _extras
+from data_update.common_data_update import get_conn
 from common import (
     ROOT_DIR, FREIGHT_VEH_IDS, md5_file, already_ingested,
     record_ingestion, list_date_subfolders, is_monthly_folder,
-    get_conn, ensure_archive, move_to_archive,
     normalize_soc, minutes_to_hours, round_int,
     get_fleet_id_and_vehicle_maps
 )
