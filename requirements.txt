@@ -7,3 +7,4 @@ SQLAlchemy==2.0.40
 gunicorn==23.0.0
 python-dotenv==1.1.0
 xlrd==2.0.1
+geopandas==1.1.1

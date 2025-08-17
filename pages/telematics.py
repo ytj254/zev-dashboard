@@ -6,6 +6,7 @@ from db import engine
 from styles import DROPDOWN_STYLE, DARK_BG, TEXT_COLOR
 import json
 import plotly.express as px
+import geopandas as gpd
 
 
 register_page(__name__, path="/telematics")
@@ -25,6 +26,21 @@ pa_border = dl.GeoJSON(
     data=pa_geojson,
     options=dict(style=dict(color="red", weight=2, fill=False)),
     hoverStyle=dict(weight=2, color="darkblue")
+)
+
+# Load EJ areas from PostGIS
+ej_gdf = gpd.read_postgis(
+    "SELECT id, ejarea, geometry FROM ej_area WHERE ejarea = true",
+    engine,
+    geom_col="geometry"
+)
+ej_geojson = json.loads(ej_gdf.to_json())
+
+# Style EJ areas: all red
+ej_layer = dl.GeoJSON(
+    data=ej_geojson,
+    options=dict(style=dict(color="red", weight=1, fillOpacity=0.3)),
+    id="ej-layer"
 )
 
 # ---------- Layout ----------
@@ -74,6 +90,7 @@ layout = html.Div([
                 children=[
                     dl.TileLayer(),
                     pa_border,
+                    ej_layer,
                 ],
                 bounds=[[39.7198, -80.5199], [42.2695, -74.6895]],
                 style={'height': '90vh'}
@@ -193,4 +210,4 @@ def update_map_and_summary(fleet_name, vehicle_id, start_date, end_date):
         color = FLEET_COLORS.get(fleet, "gray")
         polylines.append(dl.Polyline(positions=coords, color=color, weight=3, opacity=0.9))
 
-    return [dl.TileLayer(), pa_border, *polylines], summary_table
+    return [dl.TileLayer(), pa_border, ej_layer, *polylines], summary_table
