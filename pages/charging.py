@@ -29,7 +29,11 @@ def load_charging_data():
     df["connecting_duration"] = (df["disconnect_time"] - df["connect_time"]).dt.total_seconds() / 60
     
     df["charger_type"] = df["charger_type"].map(charger_type_map).fillna(df["charger_type"])
-    df["date"] = pd.to_datetime(df["connect_time"]).dt.date
+    # --- Robust event date: connect_time → refuel_end → refuel_start ---
+    date_series = df["connect_time"].copy()
+    date_series = date_series.fillna(df["refuel_start"])
+    df["date"] = date_series.dt.date
+    
     return df
 
 def _daily_mean(df, col):
