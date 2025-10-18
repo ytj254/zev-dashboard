@@ -32,6 +32,15 @@ def load_charging_data():
     df["date"] = pd.to_datetime(df["connect_time"]).dt.date
     return df
 
+def _daily_mean(df, col):
+    # Build per-metric daily series safely
+    if df.empty or col not in df.columns:
+        return None
+    d = df[["date", col]].dropna()
+    if d.empty:
+        return None
+    return d.groupby("date", as_index=False)[col].mean()
+
 # === Layout ===
 
 layout = html.Div([
@@ -170,36 +179,44 @@ def update_figures(fleet_val, charger_val, start_date, end_date):
     if end_date:
         df = df[df["date"] <= pd.to_datetime(end_date).date()]
 
-    if df.empty:
-        return (
-            empty_fig("No data available"),
-            empty_fig("No data available"),
-            empty_fig("No data available"),
-            empty_fig("No data available")
-        )
+    # Build each figure independently
+    figs = []
 
-    daily = df.groupby("date").agg({
-        "avg_power": "mean",
-        "soc_gain": "mean",
-        "charging_duration": "mean",
-        "connecting_duration": "mean"
-    }).reset_index()
+    daily_power = _daily_mean(df, "avg_power")
+    if daily_power is None or daily_power.empty:
+        figs.append(empty_fig("No data available"))
+    else:
+        f = px.bar(daily_power, x="date", y="avg_power", title="Average Power Output (kW)")
+        f.update_layout(yaxis_title="Power (kW)")
+        figs.append(f)
 
-    fig1 = px.bar(daily, x="date", y="avg_power", title="Average Power Output (kW)")
-    fig1.update_layout(yaxis_title="Power (kW)")
-    
-    fig2 = px.bar(daily, x="date", y="soc_gain", title="Average SOC Gain (%)")
-    fig2.update_layout(yaxis_title="SOC (%)")
+    daily_soc = _daily_mean(df, "soc_gain")
+    if daily_soc is None or daily_soc.empty:
+        figs.append(empty_fig("No data available"))
+    else:
+        f = px.bar(daily_soc, x="date", y="soc_gain", title="Average SOC Gain (%)")
+        f.update_layout(yaxis_title="SOC (%)")
+        figs.append(f)
 
-    fig3 = px.bar(daily, x="date", y="charging_duration", title="Average Charging Duration (min)")
-    fig3.update_layout(yaxis_title="Duration (min)")
+    daily_chg = _daily_mean(df, "charging_duration")
+    if daily_chg is None or daily_chg.empty:
+        figs.append(empty_fig("No data available"))
+    else:
+        f = px.bar(daily_chg, x="date", y="charging_duration", title="Average Charging Duration (min)")
+        f.update_layout(yaxis_title="Duration (min)")
+        figs.append(f)
 
-    fig4 = px.bar(daily, x="date", y="connecting_duration", title="Average Connecting Duration (min)")
-    fig4.update_layout(yaxis_title="Duration (min)")
+    daily_conn = _daily_mean(df, "connecting_duration")
+    if daily_conn is None or daily_conn.empty:
+        figs.append(empty_fig("No data available"))
+    else:
+        f = px.bar(daily_conn, x="date", y="connecting_duration", title="Average Connecting Duration (min)")
+        f.update_layout(yaxis_title="Duration (min)")
+        figs.append(f)
 
-    for fig in [fig1, fig2, fig3, fig4]:
-        fig.update_layout(
-            yaxis_title=None,
+    # Style all figures consistently
+    for f in figs:
+        f.update_layout(
             plot_bgcolor=DARK_BG,
             paper_bgcolor=DARK_BG,
             font_color=TEXT_COLOR,
@@ -207,4 +224,4 @@ def update_figures(fleet_val, charger_val, start_date, end_date):
             yaxis=dict(gridcolor=GRID_COLOR)
         )
 
-    return fig1, fig2, fig3, fig4
+    return tuple(figs)
