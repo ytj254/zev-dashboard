@@ -5,7 +5,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 from data_update.common_data_update import engine
 
 # --- Config ---
-EXCEL_FILE = "D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Freight Equipment Leasing\Charging log\Charge Log - 2025-07-30 11_58_31.xlsx"
+EXCEL_FILE = "D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Freight Equipment Leasing\Charging log\Charge Log - 2025-09-22 08_47_38.xlsx"
 
 # --- Helpers ---
 def normalize_charger(charger_str: str) -> str | None:
@@ -40,12 +40,13 @@ def parse_duration(val):
         return None
 
 # --- Load Excel ---
-df = pd.read_excel(EXCEL_FILE, header=1)
+df = pd.read_excel(EXCEL_FILE)
 df.columns = df.columns.str.strip()  # strip spaces just in case
-# print(df)
+# print(f'Original db: {df}')
 
 # Normalize charger IDs
 df["charger_id"] = df["Charger"].apply(normalize_charger)
+# print(f'Normalized db: {df}')
 
 # Get DB maps
 veh_map = fetch_vehicle_map()
@@ -56,6 +57,7 @@ before = len(df)
 
 # Filter chargers to only those known in DB
 df = df[df["charger_id"].isin(charger_map.keys())]
+# print(f'Filtered db: {df}')
 
 # Report dropped chargers
 dropped_chargers = before - len(df)
@@ -86,19 +88,49 @@ df_db["avg_power"] = df_db.apply(
     axis=1
 )
 
+# derive duration from timestamps to double-check vendor field
+dur_min_from_ts = (df_db["disconnect_time"] - df_db["connect_time"]).dt.total_seconds() / 60
+df_db["dur_check"] = dur_min_from_ts.round(2)
+
+valid = (
+    df_db["connect_time"].notna()
+    & df_db["disconnect_time"].notna()
+    & (df_db["disconnect_time"] > df_db["connect_time"])
+    & (df_db["tot_ref_dura"].fillna(0) > 0)
+    & (df_db["dur_check"].fillna(0) > 0)
+    & (df_db["tot_energy"].fillna(0) > 0)
+)
+
+dropped = (~valid).sum()
+print(f"[INFO] Dropping {dropped} rows (zero/invalid duration or energy)")
+
+df_db = df_db[valid].drop(columns=["dur_check"])
+
 # Replace NaT / NaN → None
 df_db = df_db.replace({pd.NaT: None})
 df_db = df_db.where(pd.notna(df_db), None)
 
 print(df_db)
+
 # --- Insert into DB ---
 insert_sql = """
 INSERT INTO public.refuel_inf (
     charger_id, veh_id, connect_time, disconnect_time,
     avg_power, tot_energy, tot_ref_dura
-)
-VALUES %s
-ON CONFLICT DO NOTHING;
+) VALUES %s
+ON CONFLICT (charger_id, connect_time)
+DO UPDATE SET
+  disconnect_time = EXCLUDED.disconnect_time,
+  avg_power       = EXCLUDED.avg_power,
+  tot_energy      = EXCLUDED.tot_energy,
+  tot_ref_dura    = EXCLUDED.tot_ref_dura,
+  veh_id          = EXCLUDED.veh_id
+WHERE
+  refuel_inf.disconnect_time IS DISTINCT FROM EXCLUDED.disconnect_time OR
+  refuel_inf.avg_power       IS DISTINCT FROM EXCLUDED.avg_power       OR
+  refuel_inf.tot_energy      IS DISTINCT FROM EXCLUDED.tot_energy      OR
+  refuel_inf.tot_ref_dura    IS DISTINCT FROM EXCLUDED.tot_ref_dura    OR
+  refuel_inf.veh_id          IS DISTINCT FROM EXCLUDED.veh_id;
 """
 
 cols = ["charger_id", "veh_id", "connect_time", "disconnect_time",
@@ -114,4 +146,4 @@ try:
 finally:
     conn.close()
 
-print(f"Inserted {len(tuples)} rows into refuel_inf")
+print(f"Upserted {len(tuples)} rows into refuel_inf")
