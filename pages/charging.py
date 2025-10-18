@@ -164,11 +164,12 @@ def populate_charger_options(_):
 def update_figures(fleet_val, charger_val, start_date, end_date):
     df = load_charging_data()
     
-    # Auto-limit to latest 30 days if nothing is selected
+# Auto-limit to latest 30 days if nothing is selected
     if not any([fleet_val, charger_val, start_date, end_date]) and not df.empty:
-        latest = df["date"].max()
-        earliest = latest - pd.Timedelta(days=29)
-        df = df[df["date"].between(earliest, latest)]
+        if pd.notna(pd.Series(df["date"]).max()):
+            latest = pd.to_datetime(df["date"]).max()
+            earliest = latest - pd.Timedelta(days=29)
+            df = df[(pd.to_datetime(df["date"]) >= earliest) & (pd.to_datetime(df["date"]) <= latest)]
         
     if fleet_val:
         df = df[df["fleet_name"] == fleet_val]
