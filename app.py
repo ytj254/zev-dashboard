@@ -1,3 +1,4 @@
+import os, dash_auth
 from dash import Dash, html, page_container
 import dash_bootstrap_components as dbc
 
@@ -8,6 +9,14 @@ app = Dash(
     suppress_callback_exceptions=True
 )
 server = app.server  # This is what gunicorn needs
+server.secret_key = "a8f34b7f9c0e6ad9204ff9b43b8e5c71"
+
+VALID_USERS = {
+    os.environ.get("ZEV_USER1"): os.environ.get("ZEV_PASS1"),
+}
+dash_auth.BasicAuth(app, VALID_USERS)
+
+auth = dash_auth.BasicAuth(app, VALID_USERS)
 
 nav_items = [
     dbc.NavItem(dbc.NavLink("OVERVIEW", href="/", active="exact")),
