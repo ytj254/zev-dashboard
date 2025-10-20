@@ -64,6 +64,7 @@ sudo systemctl restart zev
 ## Testing the App locally
 
 ```bash
+Run start-tunnel.bat in aws/
 python app.py  
 Open http://127.0.0.1:8050/
 ```
