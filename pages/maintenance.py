@@ -399,7 +399,7 @@ def update_block2_block3(fleets_sel, asset_type, asset_ids, start_date, end_date
     d = apply_filters(_df, fleets_sel, asset_type, asset_ids, start_date, end_date)
 
     # ---- Block 2: Fleet table ----
-    tbl = compute_fleet_table(d)
+    tbl = compute_fleet_table(_df)
     # Format money columns for display
     money_cols = ["Total cost", "Avg total cost", "Avg parts cost", "Avg labor cost", "Avg added cost"]
     for c in money_cols:
