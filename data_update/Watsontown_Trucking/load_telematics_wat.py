@@ -7,7 +7,7 @@ from data_update.common_data_update import engine
 
 # --- Config ---
 FOLDER_PATH = "D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Watsontown Trucking"
-FILE_PATH = "\WATW EV Reports 020125-073125\WATW Zonar EV7 Fuel Path 020125-073125.csv"
+FILE_PATH = "\Charging & Telematics_Qtr 3 2025\WATW Zonar Fuel Path - EVJ2.csv"
 CSV_PATH = FOLDER_PATH + FILE_PATH
 # print(CSV_PATH)
 
@@ -45,7 +45,7 @@ df["veh_id"] = df["Asset No."].map(veh_map).astype("Int64")
 
 
 df = df[["veh_id", "timestamp", "speed", "mileage", "latitude", "longitude"]]
-print(df)
+# print(df)
 
 # ---------- Data quality filters & counts ----------
 total_rows = len(df)
@@ -71,7 +71,6 @@ def _py(v):
     if isinstance(v, np.generic): return v.item()  # np.int64/float64 -> py
     return v
 
-inserted = 0
 records = []
 for vid, ts, sp, mi, la, lo in df[["veh_id","timestamp","speed","mileage","latitude","longitude"]].itertuples(index=False, name=None):
     records.append((
@@ -80,22 +79,25 @@ for vid, ts, sp, mi, la, lo in df[["veh_id","timestamp","speed","mileage","latit
         _py(sp), _py(mi), _py(la), _py(lo),
         _py(lo), _py(la)                        # for ST_MakePoint(lon, lat)
     ))
-sql = """
-INSERT INTO veh_tel (veh_id, "timestamp", speed, mileage, latitude, longitude, location)
-VALUES %s
-ON CONFLICT (veh_id, "timestamp") DO NOTHING
-RETURNING id;
-"""
-template = "(%s,%s,%s,%s,%s,%s, ST_SetSRID(ST_MakePoint(%s,%s),4326)::geography)"
+    
+inserted = 0
+if records:
+    sql = """
+    INSERT INTO veh_tel (veh_id, "timestamp", speed, mileage, latitude, longitude, location)
+    VALUES %s
+    ON CONFLICT (veh_id, "timestamp") DO NOTHING
+    RETURNING id;
+    """
+    template = "(%s,%s,%s,%s,%s,%s, ST_SetSRID(ST_MakePoint(%s,%s),4326)::geography)"
 
-conn = engine.raw_connection()
-try:
-    with conn.cursor() as cur:
-        ret = extras.execute_values(cur, sql, records, template=template, page_size=5000, fetch=True)
-        inserted = len(ret)  # number of rows actually inserted
-    conn.commit()
-finally:
-    conn.close()
+    conn = engine.raw_connection()
+    try:
+        with conn.cursor() as cur:
+            ret = extras.execute_values(cur, sql, records, template=template, page_size=5000, fetch=True)
+            inserted = len(ret)  # number of rows actually inserted
+        conn.commit()
+    finally:
+        conn.close()
 
 # ---------- Report ----------
 attempted = len(df)
