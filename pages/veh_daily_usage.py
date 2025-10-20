@@ -5,7 +5,7 @@ import plotly.express as px
 from db import engine
 from styles import DROPDOWN_STYLE, DARK_BG, GRID_COLOR, TEXT_COLOR, empty_fig
 
-register_page(__name__, path="/veh_daily_usage")
+register_page(__name__, path="/veh_daily_usage", name="Vehicle Daily Usage")
 
 metric_options = [
     {'label': 'Total Distance (mi)', 'value': 'tot_dist'},

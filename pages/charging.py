@@ -7,7 +7,7 @@ from utils import charger_type_map
 from styles import DROPDOWN_STYLE, DARK_BG, GRID_COLOR, TEXT_COLOR, empty_fig
 
 
-register_page(__name__, path="/charging")
+register_page(__name__, path="/charging", name="Charging")
 
 def load_charging_data():
     query = """

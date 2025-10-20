@@ -16,7 +16,7 @@ columns=[
     {"name": "Vendor", "id": "vendor_name"},
 ]
 
-register_page(__name__, path="/fleet_info")
+register_page(__name__, path="/fleet_info", name="Fleet Information")
 
 # Load PA boundary GeoJSON (replace with your local path or URL fetch if needed)
 with open("assets/pa_boundary.geojson") as f:

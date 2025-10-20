@@ -1,7 +1,7 @@
 # pages/overview.py
 from dash import register_page, html
 
-register_page(__name__, path="/")
+register_page(__name__, path="/", name="Overview")
 
 background_url = "/assets/background.png"  # Place the image in the assets folder
 

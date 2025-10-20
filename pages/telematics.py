@@ -9,7 +9,7 @@ import plotly.express as px
 import geopandas as gpd
 
 
-register_page(__name__, path="/telematics")
+register_page(__name__, path="/telematics", name="Telematics")
 
 # ---------- Fleet Color Mapping ----------
 COLOR_SERIES = px.colors.qualitative.Dark24
