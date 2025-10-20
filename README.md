@@ -59,3 +59,9 @@ git pull origin main
 pip install -r requirements.txt  # Optional
 sudo systemctl restart zev
 ```
+
+---
+## Testing the App locally
+
+python app.py
+open http://127.0.0.1:8050/
