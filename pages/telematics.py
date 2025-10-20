@@ -39,7 +39,7 @@ ej_geojson = json.loads(ej_gdf.to_json())
 # Style EJ areas: all red
 ej_layer = dl.GeoJSON(
     data=ej_geojson,
-    options=dict(style=dict(color="red", weight=1, fillOpacity=0.3)),
+    options=dict(style=dict(color="gray", weight=1, fillOpacity=0.3)),
     id="ej-layer"
 )
 
