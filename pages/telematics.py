@@ -3,11 +3,28 @@ import dash_leaflet as dl
 import dash_bootstrap_components as dbc
 import pandas as pd
 from db import engine
+from sqlalchemy import text
 from styles import DROPDOWN_STYLE, DARK_BG, TEXT_COLOR
 import json
 import plotly.express as px
 import geopandas as gpd
 
+
+def latest_month_bounds(engine):
+    sql = text("""
+        WITH m AS (
+          SELECT max("timestamp")::date AS end_d
+          FROM veh_tel
+        )
+        SELECT (end_d - INTERVAL '30 days')::date AS start_date,
+               end_d::date                         AS end_date
+        FROM m;
+    """)
+    df = pd.read_sql(sql, engine)
+    if df.empty or pd.isna(df.iloc[0]['end_date']):
+        return None, None
+    r = df.iloc[0]
+    return str(r.start_date), str(r.end_date)
 
 register_page(__name__, path="/telematics", name="Telematics")
 
@@ -43,6 +60,8 @@ ej_layer = dl.GeoJSON(
     id="ej-layer"
 )
 
+start_d, end_d = latest_month_bounds(engine)
+
 # ---------- Layout ----------
 layout = html.Div([
     # KPI Row (always full dataset)
@@ -59,7 +78,7 @@ layout = html.Div([
             html.H5("Filters", style={"color": TEXT_COLOR}),
             dcc.Dropdown(id="fleet-dropdown-telematics", placeholder="Select Fleet", style=DROPDOWN_STYLE),
             dcc.Dropdown(id="vehicle-dropdown-telematics", placeholder="Select Vehicle", style=DROPDOWN_STYLE),
-            dcc.DatePickerRange(id="date-picker", display_format="YYYY-MM-DD"),
+            dcc.DatePickerRange(id="date-picker", start_date=start_d, end_date=end_d,),
             
             # add spacing
             html.Div(style={"height": "25px"}),
