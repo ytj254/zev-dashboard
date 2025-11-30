@@ -5,7 +5,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 from data_update.common_data_update import engine
 
 # --- Config ---
-EXCEL_FILE = "D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Freight Equipment Leasing\Charging log\Charge Log - 2025-09-22 08_47_38.xlsx"
+EXCEL_FILE = "D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Freight Equipment Leasing\Charging log\Charge Log - 2025-10-27 10_23_31.xlsx"
 
 # --- Helpers ---
 def normalize_charger(charger_str: str) -> str | None:
@@ -118,19 +118,21 @@ INSERT INTO public.refuel_inf (
     charger_id, veh_id, connect_time, disconnect_time,
     avg_power, tot_energy, tot_ref_dura
 ) VALUES %s
-ON CONFLICT (charger_id, connect_time)
+ON CONFLICT ON CONSTRAINT uq_refuel_session
 DO UPDATE SET
   disconnect_time = EXCLUDED.disconnect_time,
   avg_power       = EXCLUDED.avg_power,
   tot_energy      = EXCLUDED.tot_energy,
   tot_ref_dura    = EXCLUDED.tot_ref_dura,
-  veh_id          = EXCLUDED.veh_id
+  veh_id          = EXCLUDED.veh_id,
+  connect_time    = EXCLUDED.connect_time
 WHERE
   refuel_inf.disconnect_time IS DISTINCT FROM EXCLUDED.disconnect_time OR
   refuel_inf.avg_power       IS DISTINCT FROM EXCLUDED.avg_power       OR
   refuel_inf.tot_energy      IS DISTINCT FROM EXCLUDED.tot_energy      OR
   refuel_inf.tot_ref_dura    IS DISTINCT FROM EXCLUDED.tot_ref_dura    OR
-  refuel_inf.veh_id          IS DISTINCT FROM EXCLUDED.veh_id;
+  refuel_inf.veh_id          IS DISTINCT FROM EXCLUDED.veh_id OR
+  refuel_inf.connect_time    IS DISTINCT FROM EXCLUDED.connect_time;
 """
 
 cols = ["charger_id", "veh_id", "connect_time", "disconnect_time",

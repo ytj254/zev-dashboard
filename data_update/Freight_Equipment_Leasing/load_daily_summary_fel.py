@@ -114,9 +114,11 @@ def main():
         total = 0
 
         for xls in sorted(excel_files):
+            rel_path = xls.relative_to(root) if root in xls.parents else xls
+            display_path = str(rel_path)
             file_hash = md5_file(xls)
             if already_ingested(conn, xls, file_hash):
-                print(f"[SKIP] {xls.name} already ingested.")
+                print(f"[SKIP] {display_path} already ingested.")
                 continue
 
             rows_loaded = 0
@@ -135,7 +137,7 @@ def main():
             record_ingestion(conn, xls, file_hash, rows_loaded)
             # move_to_archive(xls, arc)  # No more lock here
             total += rows_loaded
-            print(f"[OK] {xls.name}: {rows_loaded} rows loaded and archived.")
+            print(f"[OK] {display_path}: {rows_loaded} rows loaded and archived.")
 
         print(f"Done. Total daily rows: {total}")
 

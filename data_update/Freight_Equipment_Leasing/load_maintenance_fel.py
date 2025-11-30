@@ -9,7 +9,7 @@ from data_update.common_data_update import engine   # SQLAlchemy engine
 
 # ==================== Config ====================
 FOLDER_PATH = "D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Freight Equipment Leasing\maintenance data"
-FILE_PATH = "\data collect HBG Maintenance Events.xlsx"
+FILE_PATH = "\Freight Equipment Leasing Maintenance Events.xlsx"
 XLSX_PATH = FOLDER_PATH + FILE_PATH
 
 # -------------- Load all sheets --------------

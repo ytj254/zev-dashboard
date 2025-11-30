@@ -106,14 +106,14 @@ def main():
             for csvf in sorted(folder.glob("*.csv")):
                 file_hash = md5_file(csvf)
                 if already_ingested(conn, csvf, file_hash):
-                    print(f"[SKIP] {csvf.name} already ingested.")
+                    print(f"[SKIP] {folder.name}\\{csvf.name} already ingested.")
                     continue
                 rows, warns = load_csv_file(conn, csvf, str2int)
                 record_ingestion(conn, csvf, file_hash, rows)
                 # move_to_archive(csvf, arc)
                 grand_rows += rows
                 grand_warns += warns
-                print(f"[OK] {csvf.name}: {rows} rows loaded; archived.")
+                print(f"[OK] {folder.name}\\{csvf.name}: {rows} rows loaded; archived.")
 
         print(f"Done. Tel rows: {grand_rows}. Warnings (missing timestamps): {grand_warns}")
 
