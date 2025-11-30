@@ -8,7 +8,7 @@ from data_update.common_data_update import engine   # SQLAlchemy engine
 
 # ==================== Config ====================
 FOLDER_PATH = "D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors\maintenance"
-FILE_PATH = "\EV Data Collection - Vehicle Maintenance - Mar-Sep-2025.xlsx"
+FILE_PATH = "\Wilsbach EV Data Collection - Vehicle Maintenance - Mar-Oct-2025.xlsx"
 XLSX_PATH = FOLDER_PATH + FILE_PATH
 
 # ==================== Load ====================

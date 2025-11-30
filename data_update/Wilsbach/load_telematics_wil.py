@@ -7,7 +7,7 @@ from data_update.common_data_update import engine   # SQLAlchemy engine
 
 # ==================== Config ====================
 FOLDER_PATH = "D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors\Telematics"
-FILE_PATH = "\EV Data Collection - NEW Telematics Data - 04-2025.xlsx"
+FILE_PATH = "\EV Data Collection - Telematics Data - 10-2025.xlsx"
 XLSX_PATH = FOLDER_PATH + FILE_PATH
 
 MAX_ODO_JUMP = 5               # miles between records

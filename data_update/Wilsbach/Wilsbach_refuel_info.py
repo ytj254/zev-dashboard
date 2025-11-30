@@ -5,7 +5,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 from data_update.common_data_update import engine
 
 # 1) Load Excel
-excel_path = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors\Charging event\EV Data Collection - Charging Event Data - 09-2025.xlsx"
+excel_path = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors\Charging event\EV Data Collection - Charging Event Data - 10-2025.xlsx"
 df = pd.read_excel(excel_path)
 
 # 2) Basic normalization
@@ -96,7 +96,7 @@ INSERT INTO public.refuel_inf (
     refuel_start, refuel_end, avg_power, max_power,
     tot_energy, start_soc, end_soc, tot_ref_dura
 ) VALUES %s
-ON CONFLICT (charger_id, connect_time)
+ON CONFLICT ON CONSTRAINT uq_refuel_session
 DO UPDATE SET
   disconnect_time = EXCLUDED.disconnect_time,
   refuel_start    = EXCLUDED.refuel_start,
@@ -120,6 +120,9 @@ WHERE
   refuel_inf.veh_id          IS DISTINCT FROM EXCLUDED.veh_id          OR
   refuel_inf.tot_ref_dura    IS DISTINCT FROM EXCLUDED.tot_ref_dura;
 """
+
+# Ensure pandas NA -> None for psycopg2
+df_db = df_db.map(lambda x: None if pd.isna(x) else x)
 
 rows = [tuple(x) for x in df_db.to_numpy()]
 conn = engine.raw_connection()
