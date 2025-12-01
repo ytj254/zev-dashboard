@@ -203,10 +203,9 @@ def update_map_and_summary(fleet_name, vehicle_id, start_date, end_date):
     if df.empty:
         return [dl.TileLayer(), pa_border], html.Div("No data", style={"color": TEXT_COLOR})
     
-    # Sort points in time and split trajectories by day to avoid cross-day connecting lines
+    # Sort points in time and split trajectories by vehicle to avoid cross-vehicle connections
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     df = df.sort_values("timestamp")
-    df["date"] = df["timestamp"].dt.date
 
     # Summary Table
     summary_data = [
@@ -229,10 +228,16 @@ def update_map_and_summary(fleet_name, vehicle_id, start_date, end_date):
 
     # Build polylines with fixed fleet colors
     polylines = []
-    for (fleet, date), fleet_df in df.groupby(["fleet_name", "date"]):
+    for (fleet, veh), fleet_df in df.groupby(["fleet_name", "fleet_vehicle_id"]):
         coords = list(zip(fleet_df["latitude"], fleet_df["longitude"]))
         color = FLEET_COLORS.get(fleet, "gray")
-        tooltip = f"{fleet} - {date}"
-        polylines.append(dl.Polyline(positions=coords, color=color, weight=3, opacity=0.9, tooltip=tooltip))
+        tooltip = f"{fleet} | {veh}"
+        polylines.append(dl.Polyline(
+            positions=coords,
+            color=color,
+            weight=3,
+            opacity=0.9,
+            children=[dl.Tooltip(tooltip)]
+        ))
 
     return [dl.TileLayer(), pa_border, ej_layer, *polylines], summary_table
