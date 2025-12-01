@@ -1,5 +1,5 @@
 """
-Compute daily vehicle usage from telematics and insert only missing veh_daily rows.
+Compute daily vehicle usage from telematics and upsert veh_daily rows (overwrite existing).
 
 Defaults:
     - Fleets: 2 and 3
@@ -9,7 +9,7 @@ Defaults:
 import argparse
 import datetime as dt
 import sys
-from typing import List, Tuple, Dict, Any, Set
+from typing import List, Tuple, Dict, Any
 
 import os
 # Allow running the script directly without installing the package
@@ -61,17 +61,6 @@ def fetch_telematics(cur, fleet_ids: List[int]):
     """
     cur.execute(sql, (fleet_ids,))
     return cur.fetchall()
-
-
-def fetch_existing_keys(cur, fleet_ids: List[int]) -> Set[Tuple[int, dt.date]]:
-    sql = """
-        SELECT d.veh_id, d.date
-        FROM veh_daily d
-        JOIN vehicle v ON v.id = d.veh_id
-        WHERE v.fleet_id = ANY(%s);
-    """
-    cur.execute(sql, (fleet_ids,))
-    return {(veh_id, day) for (veh_id, day) in cur.fetchall()}
 
 
 def aggregate_daily(rows, idle_threshold_minutes: float) -> Dict[Tuple[int, dt.date], Dict[str, Any]]:
@@ -166,7 +155,6 @@ def aggregate_daily(rows, idle_threshold_minutes: float) -> Dict[Tuple[int, dt.d
 
 def build_daily_records(
     aggregates: Dict[Tuple[int, dt.date], Dict[str, Any]],
-    existing_keys: Set[Tuple[int, dt.date]],
 ) -> List[Dict[str, Any]]:
     return [
         {
@@ -184,14 +172,13 @@ def build_daily_records(
             "tot_energy": agg["tot_energy"],
             "peak_payload": agg["peak_payload"],
         }
-        for key, agg in aggregates.items()
-        if key not in existing_keys
+        for agg in aggregates.values()
     ]
 
 
 def insert_daily(cur, daily_records: List[Dict[str, Any]]):
     if not daily_records:
-        log("No new veh_daily rows to insert.")
+        log("No veh_daily rows to upsert.")
         return
 
     sql = """
@@ -224,10 +211,22 @@ def insert_daily(cur, daily_records: List[Dict[str, Any]]):
             %(tot_soc_used)s,
             %(tot_energy)s,
             %(peak_payload)s
-        );
+        )
+        ON CONFLICT (veh_id, date) DO UPDATE SET
+            trip_num     = EXCLUDED.trip_num,
+            init_odo     = EXCLUDED.init_odo,
+            final_odo    = EXCLUDED.final_odo,
+            tot_dist     = EXCLUDED.tot_dist,
+            tot_dura     = EXCLUDED.tot_dura,
+            idle_time    = EXCLUDED.idle_time,
+            init_soc     = EXCLUDED.init_soc,
+            final_soc    = EXCLUDED.final_soc,
+            tot_soc_used = EXCLUDED.tot_soc_used,
+            tot_energy   = EXCLUDED.tot_energy,
+            peak_payload = EXCLUDED.peak_payload;
     """
     execute_batch(cur, sql, daily_records, page_size=1000)
-    log(f"Inserted {len(daily_records)} new veh_daily rows.")
+    log(f"Upserted {len(daily_records)} veh_daily rows.")
 
 
 def main():
@@ -251,11 +250,8 @@ def main():
             if dates:
                 log(f"Date range in telematics for these fleets: {min(dates)} to {max(dates)}")
 
-            existing = fetch_existing_keys(cur, args.fleet_ids)
-            log(f"Existing veh_daily entries for these fleets: {len(existing)}")
-
-            records = build_daily_records(aggregates, existing)
-            log(f"New (veh_id, date) rows to insert: {len(records)}")
+            records = build_daily_records(aggregates)
+            log(f"Vehicle-day rows to upsert: {len(records)}")
 
             insert_daily(cur, records)
         conn.commit()
