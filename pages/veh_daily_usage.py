@@ -64,7 +64,9 @@ layout = html.Div([
 
     html.Div([
         html.H5("Daily Metric by Date", style={"color": TEXT_COLOR}),
-        dcc.Graph(id='daily-usage-graph')
+        dcc.Graph(id='daily-usage-graph'),
+        html.Div(style={"height": "20px"}),
+        dcc.Graph(id='efficiency-graph')
     ])
 ])
 
@@ -100,8 +102,23 @@ def update_filters(fleets, records):
         [{'label': x, 'value': x} for x in sorted(df['fleet_vehicle_id'].dropna().unique())],
     )
 
+def _filter_daily(records, fleets, makes, models, classes, veh_ids, start_date, end_date):
+    df = pd.DataFrame(records)
+    df["date"] = pd.to_datetime(df["date"]).dt.date
+
+    if fleets: df = df[df["fleet"] == fleets]
+    if makes: df = df[df["make"] == makes]
+    if models: df = df[df["model"] == models]
+    if classes: df = df[df["class"] == classes]
+    if veh_ids: df = df[df["fleet_vehicle_id"] == veh_ids]
+    if start_date: df = df[df["date"] >= pd.to_datetime(start_date).date()]
+    if end_date: df = df[df["date"] <= pd.to_datetime(end_date).date()]
+    return df
+
+
 @callback(
     Output('daily-usage-graph', 'figure'),
+    Output('efficiency-graph', 'figure'),
     Input('fleet-dropdown', 'value'),
     Input('make-dropdown', 'value'),
     Input('model-dropdown', 'value'),
@@ -112,21 +129,11 @@ def update_filters(fleets, records):
     Input('metric-dropdown', 'value'),
     State('daily-usage-store', 'data')
 )
-
-def update_figure(fleets, makes, models, classes, veh_ids, start_date, end_date, metric, records):
-    df = pd.DataFrame(records)
-    df["date"] = pd.to_datetime(df["date"]).dt.date  # Ensure proper type
-
-    if fleets: df = df[df["fleet"] == fleets]
-    if makes: df = df[df["make"] == makes]
-    if models: df = df[df["model"] == models]
-    if classes: df = df[df["class"] == classes]
-    if veh_ids: df = df[df["fleet_vehicle_id"] == veh_ids]
-    if start_date: df = df[df["date"] >= pd.to_datetime(start_date).date()]
-    if end_date: df = df[df["date"] <= pd.to_datetime(end_date).date()]
+def update_figures(fleets, makes, models, classes, veh_ids, start_date, end_date, metric, records):
+    df = _filter_daily(records, fleets, makes, models, classes, veh_ids, start_date, end_date)
 
     if df.empty or metric not in df.columns:
-        return empty_fig("No data available")
+        return empty_fig("No data available"), empty_fig("No data available")
 
     y_label = next((opt['label'] for opt in metric_options if opt['value'] == metric), metric)
     fig = px.bar(df, x="date", y=metric, title=f"{y_label} per Day")
@@ -139,7 +146,34 @@ def update_figure(fleets, makes, models, classes, veh_ids, start_date, end_date,
         xaxis=dict(gridcolor=GRID_COLOR),
         yaxis=dict(gridcolor=GRID_COLOR)
     )
-    return fig
+
+    eff_source = df[(df["tot_dist"] >= 10) & (df["tot_energy"] > 0)]
+    eff_df = (
+        eff_source.groupby("date")
+        .agg({"tot_energy": "sum", "tot_dist": "sum"})
+        .reset_index()
+    )
+    eff_df["efficiency"] = eff_df.apply(
+        lambda r: r.tot_energy / r.tot_dist if pd.notna(r.tot_energy) and pd.notna(r.tot_dist) and r.tot_dist != 0 else None,
+        axis=1
+    )
+    eff_df = eff_df[pd.notna(eff_df["efficiency"])]
+
+    if eff_df.empty:
+        eff_fig = empty_fig("No efficiency data")
+    else:
+        eff_fig = px.bar(eff_df, x="date", y="efficiency", title="Energy Efficiency (kWh/mi)")
+        eff_fig.update_layout(
+            yaxis_title="kWh/mi",
+            xaxis_title="Date",
+            paper_bgcolor=DARK_BG,
+            plot_bgcolor=DARK_BG,
+            font_color=TEXT_COLOR,
+            xaxis=dict(gridcolor=GRID_COLOR),
+            yaxis=dict(gridcolor=GRID_COLOR)
+        )
+
+    return fig, eff_fig
 
 @callback(
     Output("kpi-total-distance", "children"),
@@ -158,26 +192,59 @@ def update_kpis_and_table(_, records):
     if df.empty:
         return "0", "0", "0", "0", "0", [], []
 
+    def safe_mean(series):
+        s = series.dropna()
+        return s.mean() if not s.empty else None
+
+    def safe_eff(group):
+        eff_src = group[(group["tot_dist"] > 0) & (group["tot_energy"] > 0)]
+        dist_sum = eff_src["tot_dist"].sum(skipna=True)
+        if dist_sum and dist_sum > 0:
+            energy_sum = eff_src["tot_energy"].sum(skipna=True)
+            return energy_sum / dist_sum
+        return None
+
     summary = []
     for fleet_name, group in df.groupby("fleet"):
+        dist_positive = group[group["tot_dist"] > 0]["tot_dist"]
+        energy_positive = group[group["tot_energy"] > 0]["tot_energy"]
+        dura_positive = group[group["tot_dura"] > 0]["tot_dura"]
         summary.append({
             "Fleet": fleet_name,
             "Total Distance (mi)": round(group["tot_dist"].sum(), 2),
-            "Daily Distance (mi)": round(group[group["tot_dist"] > 0]["tot_dist"].mean(), 2),
-            "Daily Energy (kWh)": round(group[group["tot_energy"] > 0]["tot_energy"].mean(), 2),
-            "Daily SOC Used (%)": round(group[group["tot_soc_used"] > 0]["tot_soc_used"].mean(), 2),
-            "Daily Driving Time (hr)": round(group[group["tot_dura"] > 0]["tot_dura"].mean(), 2),
-            "Daily Idle Time (hr)": round(group["idle_time"].mean(), 2),
-            "Daily Payload (lbs)": round(group["peak_payload"].mean(), 2),
+            "Daily Distance (mi)": safe_mean(dist_positive),
+            "Daily Energy (kWh)": safe_mean(energy_positive),
+            "Energy Efficiency (kWh/mi)": safe_eff(group),
+            "Daily SOC Used (%)": safe_mean(group[group["tot_soc_used"] > 0]["tot_soc_used"]),
+            "Daily Driving Time (hr)": safe_mean(dura_positive),
+            "Daily Idle Time (hr)": safe_mean(group["idle_time"]),
         })
 
     df_summary = pd.DataFrame(summary)
+
+    # Prepare table display with placeholders
+    def fmt(val, digits=2):
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return "n/a"
+        try:
+            return f"{val:.{digits}f}"
+        except Exception:
+            return val
+
+    table_df = df_summary.copy()
+    for col in table_df.columns:
+        if col == "Fleet":
+            table_df[col] = table_df[col].fillna("-")
+        else:
+            table_df[col] = table_df[col].apply(fmt)
+
+    df_summary_kpi = df_summary.fillna(0)
     return (
-        f"{df_summary['Total Distance (mi)'].sum():.2f}",
-        f"{df_summary['Daily Distance (mi)'].mean():.2f}",
-        f"{df_summary['Daily Energy (kWh)'].mean():.2f}",
-        f"{df_summary['Daily Driving Time (hr)'].mean():.2f}",
-        f"{df_summary['Daily SOC Used (%)'].mean():.2f}",
-        df_summary.to_dict("records"),
-        [{"name": col, "id": col} for col in df_summary.columns]
+        f"{df_summary_kpi['Total Distance (mi)'].sum():.2f}",
+        f"{df_summary_kpi['Daily Distance (mi)'].mean():.2f}",
+        f"{df_summary_kpi['Daily Energy (kWh)'].mean():.2f}",
+        f"{df_summary_kpi['Daily Driving Time (hr)'].mean():.2f}",
+        f"{df_summary_kpi['Daily SOC Used (%)'].mean():.2f}",
+        table_df.to_dict("records"),
+        [{"name": col, "id": col} for col in table_df.columns]
     )
