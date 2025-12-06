@@ -149,7 +149,7 @@ layout = html.Div([
                     traj_layer,
                 ],
                 center=[40.9, -77.5],
-                zoom=7,
+                zoom=8,
                 style={"height": "90vh"},
             )
         ], width=9)
