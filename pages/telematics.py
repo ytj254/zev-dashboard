@@ -324,7 +324,7 @@ def update_map_and_summary(fleet_name, vehicle_id, start_date, end_date):
             dl.Polyline(
                 id={"type": "traj", "fleet": fleet, "veh": vehicle},
                 positions=coords,
-                pathOptions=dict(color=fleet_color, weight=3, opacity=0.8),
+                pathOptions=dict(color=fleet_color, weight=3, opacity=0.8),  # Should use pathOptions to set color
                 children=[dl.Tooltip(tooltip_text)],
             )
         )
