@@ -21,7 +21,7 @@ def load_maintenance():
             v.fleet_vehicle_id,
             c.charger
         FROM maintenance m
-        LEFT JOIN vehicle v ON m.vehicle_id = v.id
+        LEFT JOIN vehicle v ON m.veh_id = v.id
         LEFT JOIN fleet   f1 ON v.fleet_id = f1.id
         LEFT JOIN charger c ON m.charger_id = c.id
         LEFT JOIN fleet   f2 ON c.fleet_id = f2.id
