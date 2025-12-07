@@ -12,7 +12,6 @@ import geopandas as gpd
 register_page(__name__, path="/telematics", name="Telematics")
 
 # ---------- Fleet Color Mapping ----------
-# Pre-assign fixed colors to all fleets in database (sorted alphabetically)
 COLOR_PALETTE = px.colors.qualitative.Dark24
 
 def get_fleet_color_mapping():
@@ -150,6 +149,7 @@ layout = html.Div([
                 ],
                 center=[40.9, -77.5],
                 zoom=8,
+                preferCanvas=True,
                 style={"height": "90vh"},
             )
         ], width=9)
@@ -242,37 +242,31 @@ def update_map_and_summary(fleet_name, vehicle_id, start_date, end_date):
         FROM veh_tel t
         JOIN vehicle v ON t.veh_id = v.id
         JOIN fleet f ON v.fleet_id = f.id
-        WHERE 1=1
+        WHERE (%(fleet_name)s IS NULL OR f.fleet_name = %(fleet_name)s)
+            AND (%(vehicle_id)s IS NULL OR v.fleet_vehicle_id = %(vehicle_id)s)
+            AND (%(start)s IS NULL OR t.timestamp >= %(start)s)
+            AND (%(end)s   IS NULL OR t.timestamp <= %(end)s)
+        ORDER BY v.fleet_id, v.id, t.timestamp;
     """
-    params = []
-    
-    # Apply fleet filter if selected
-    if fleet_name:
-        query += " AND f.fleet_name = %s"
-        params.append(fleet_name)
-    
-    # Apply vehicle filter if selected
-    if vehicle_id:
-        query += " AND v.fleet_vehicle_id = %s"
-        params.append(vehicle_id)
-    
-    # Apply date filters (default to latest month if not specified)
-    if start_date:
-        query += " AND t.timestamp >= %s"
-        params.append(start_date)
-    
-    if end_date:
-        query += " AND t.timestamp <= %s"
-        params.append(end_date)
-    
-    query += " ORDER BY t.timestamp"
-    
+    params = dict(
+        fleet_name=fleet_name,
+        vehicle_id=vehicle_id,
+        start=start_date,
+        end=end_date,
+    )
+
     try:
-        df = pd.read_sql(query, engine, params=tuple(params) if params else None)
+        df = pd.read_sql(query, engine, params=params)
     except Exception as e:
         print(f"Error querying telematics data: {e}")
         error_msg = html.Div(f"Error loading data: {str(e)}", style={"color": "red"})
-        return [dl.TileLayer(), pa_border, ej_layer], error_msg
+        return [], error_msg
+
+    if df.empty:
+        no_data_msg = html.Div(
+            "No data available for selected filters", style={"color": TEXT_COLOR}
+        )
+        return [], no_data_msg
     
     # ---- drop bad coordinates: critical for the 'equals' error ----
     df = df.dropna(subset=["latitude", "longitude"])
