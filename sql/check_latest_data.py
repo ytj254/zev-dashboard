@@ -18,7 +18,7 @@ def check_latest_data_tel(table_name, fleets=None):
             ON v.fleet_id = f.id
         { "WHERE f.fleet_name IN :fleets" if fleets else "" }
         GROUP BY f.fleet_name
-        ORDER BY latest_date desc;
+        ORDER BY f.fleet_name;
     """
 
     params = {"fleets": tuple(fleets)} if fleets else {}
@@ -26,15 +26,14 @@ def check_latest_data_tel(table_name, fleets=None):
 
 def check_latest_data_refuel(table_name, fleets=None):
     sql = f"""
-        SELECT f.fleet_name, MAX("connect_time")::date as latest_date
-        FROM {table_name} AS t
-        JOIN vehicle as v
-            ON t.veh_id = v.id
+        SELECT f.fleet_name, MAX("start_time_coalesced")::date as latest_date
+        FROM refuel_inf AS t
+        JOIN charger as c
+            ON t.charger_id = c.id
         JOIN fleet AS f
-            ON v.fleet_id = f.id
-        { "WHERE f.fleet_name IN :fleets" if fleets else "" }
+            ON c.fleet_id = f.id
         GROUP BY f.fleet_name
-        ORDER BY latest_date desc;
+        ORDER BY f.fleet_name;
     """
 
     params = {"fleets": tuple(fleets)} if fleets else {}
@@ -50,7 +49,7 @@ def check_latest_data(table_name, fleets=None):
             ON v.fleet_id = f.id
         { "WHERE f.fleet_name IN :fleets" if fleets else "" }
         GROUP BY f.fleet_name
-        ORDER BY latest_date desc;
+        ORDER BY f.fleet_name;
     """
 
     params = {"fleets": tuple(fleets)} if fleets else {}
