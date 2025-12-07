@@ -78,7 +78,7 @@ def avg_miles_between_services(df_scope: pd.DataFrame) -> float:
     if df_scope.empty:
         return float("nan")
     # Only rows with vehicle_id and enter_odo + date
-    d = df_scope.dropna(subset=["vehicle_id", "enter_odo", "date"]).copy()
+    d = df_scope.dropna(subset=["veh_id", "enter_odo", "date"]).copy()
     if d.empty:
         return float("nan")
 
@@ -88,7 +88,7 @@ def avg_miles_between_services(df_scope: pd.DataFrame) -> float:
         deltas = deltas[deltas > 0]
         return deltas.mean() if len(deltas) else np.nan
 
-    per_veh = d.groupby("vehicle_id", dropna=True).apply(per_vehicle_avg)
+    per_veh = d.groupby("veh_id", dropna=True).apply(per_vehicle_avg)
     per_veh = per_veh.dropna()
     return float(per_veh.mean()) if len(per_veh) else float("nan")
 
@@ -96,7 +96,7 @@ def avg_miles_between_services(df_scope: pd.DataFrame) -> float:
 # ---------- Block 1 (GLOBAL, not filter-aware) ----------
 def kpi_block_global(df_all: pd.DataFrame):
     total_events = len(df_all)
-    veh_events = int(df_all["vehicle_id"].notna().sum())
+    veh_events = int(df_all["veh_id"].notna().sum())
     chg_events = int(df_all["charger_id"].notna().sum())
     avg_total_cost = float(df_all["total_cost"].mean(skipna=True))
     avg_miles_between = avg_miles_between_services(df_all)
@@ -151,7 +151,7 @@ def compute_fleet_table(df_scope: pd.DataFrame) -> pd.DataFrame:
         fleet_name = fleet if pd.notna(fleet) else "Unspecified"
         g_cost = df_cost[df_cost["fleet_name"] == fleet]
         events = len(g)
-        veh_events = int(g["vehicle_id"].notna().sum())
+        veh_events = int(g["veh_id"].notna().sum())
         chg_events = int(g["charger_id"].notna().sum())
 
         total_cost = float(g_cost["total_cost"].sum()) if not g_cost.empty else np.nan
@@ -337,11 +337,11 @@ def populate_asset_ids(asset_type, fleets_sel):
 
     if asset_type == "vehicle":
         opts = (
-            df.dropna(subset=["vehicle_id"])
-              .drop_duplicates(subset=["vehicle_id"])
-              .assign(label=lambda x: x["vehicle_label"].fillna(x["vehicle_id"].astype(str)))
+            df.dropna(subset=["veh_id"])
+              .drop_duplicates(subset=["veh_id"])
+              .assign(label=lambda x: x["vehicle_label"].fillna(x["veh_id"].astype(str)))
         )
-        opts = [{"label": str(row["label"]), "value": int(row["vehicle_id"])} for _, row in opts.iterrows()]
+        opts = [{"label": str(row["label"]), "value": int(row["veh_id"])} for _, row in opts.iterrows()]
     else:
         opts = (
             df.dropna(subset=["charger_id"])
@@ -366,7 +366,7 @@ def apply_filters(df, fleets_sel, asset_type, asset_ids, start_date, end_date):
     # Asset type + IDs (optional)
     if asset_type == "vehicle":
         if asset_ids:
-            d = d[d["vehicle_id"].isin(asset_ids)]
+            d = d[d["veh_id"].isin(asset_ids)]
     elif asset_type == "charger":
         if asset_ids:
             d = d[d["charger_id"].isin(asset_ids)]
