@@ -1,151 +1,193 @@
+from pathlib import Path
 import pandas as pd
 import psycopg2.extras as extras
 import sys, os
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
-from data_update.common_data_update import engine
+
+from data_update.common_data_update import get_conn
+from data_update.Freight_Equipment_Leasing.common import (
+    FLEET_NAME,
+    get_fleet_id_and_vehicle_maps,
+    get_charger_map,
+    normalize_soc,
+)
 
 # --- Config ---
-EXCEL_FILE = "D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Freight Equipment Leasing\Charging log\Charge Log - 2025-10-27 10_23_31.xlsx"
-
-# --- Helpers ---
-def normalize_charger(charger_str: str) -> str | None:
-    """Turn 'C03, Sae J1772 Combo United States, 1' → 'C03P1'"""
-    if pd.isna(charger_str):
-        return None
-    parts = [p.strip() for p in str(charger_str).split(",")]
-    if len(parts) >= 2:
-        return f"{parts[0]}P{parts[-1]}"
-    return None
-
-def fetch_vehicle_map():
-    """Return {fleet_vehicle_id -> vehicle.id} for all vehicles in DB"""
-    with engine.connect() as conn:
-        df = pd.read_sql("SELECT id, fleet_vehicle_id FROM vehicle", conn)
-    return dict(zip(df["fleet_vehicle_id"].dropna().astype(str), df["id"]))
-
-def fetch_charger_map():
-    """Return {charger string -> charger.id} for all chargers in DB"""
-    with engine.connect() as conn:
-        df = pd.read_sql("SELECT id, charger FROM charger", conn)
-    return dict(zip(df["charger"].dropna().astype(str), df["id"]))
-
-def parse_duration(val):
-    """Convert 'hh:mm:ss' string → minutes with decimals"""
-    if pd.isna(val):
-        return None
-    try:
-        h, m, s = map(int, str(val).split(":"))
-        return round(h * 60 + m + s / 60, 2)  # total minutes
-    except Exception:
-        return None
-
-# --- Load Excel ---
-df = pd.read_excel(EXCEL_FILE)
-df.columns = df.columns.str.strip()  # strip spaces just in case
-# print(f'Original db: {df}')
-
-# Normalize charger IDs
-df["charger_id"] = df["Charger"].apply(normalize_charger)
-# print(f'Normalized db: {df}')
-
-# Get DB maps
-veh_map = fetch_vehicle_map()
-charger_map = fetch_charger_map()
-
-# Count before filter
-before = len(df)
-
-# Filter chargers to only those known in DB
-df = df[df["charger_id"].isin(charger_map.keys())]
-# print(f'Filtered db: {df}')
-
-# Report dropped chargers
-dropped_chargers = before - len(df)
-print(f"[INFO] Dropped {dropped_chargers} rows with chargers not in DB")
-
-# Map IDs to integers (unmapped → NaN → later None)
-df["veh_id"] = df["Linked license plate"].astype(str).map(veh_map).astype("Int64")
-df["charger_id"] = df["charger_id"].map(charger_map).astype("Int64")
-
-# Report vehicles not mapped
-unmapped_vehicles = df["veh_id"].isna().sum()
-print(f"[INFO] Vehicles not mapped to DB (will insert as NULL): {unmapped_vehicles}")
-
-# Build DB-ready DataFrame
-df_db = pd.DataFrame({
-    "charger_id": df["charger_id"],
-    "veh_id": df["veh_id"],
-    "connect_time": pd.to_datetime(df["Start Date"], errors="coerce"),
-    "disconnect_time": pd.to_datetime(df["End Date"], errors="coerce"),
-    "tot_ref_dura": df["Total Charging Time"].map(parse_duration),
-    "tot_energy": pd.to_numeric(df["Total kWh"], errors="coerce"),
-})
-
-# Compute avg_power safely
-df_db["avg_power"] = df_db.apply(
-    lambda r: round((r.tot_energy * 60 / r.tot_ref_dura), 2)
-              if r.tot_energy is not None and r.tot_ref_dura and r.tot_ref_dura > 0 else None,
-    axis=1
+EXCEL_FILE = Path(
+    r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Freight Equipment Leasing\Charging log\PITT OHIO Charging Sessions List 2_2_2026.xlsx"
 )
+SESSIONS_SHEET = "Sessions list"
+LOCAL_TZ = "America/New_York"
 
-# derive duration from timestamps to double-check vendor field
-dur_min_from_ts = (df_db["disconnect_time"] - df_db["connect_time"]).dt.total_seconds() / 60
-df_db["dur_check"] = dur_min_from_ts.round(2)
+# Reference SQL for manual cleanup step (run before this script):
+# DELETE FROM public.refuel_inf r
+# WHERE r.charger_id IN (
+#   SELECT c.id
+#   FROM public.charger c
+#   JOIN public.fleet f ON f.id = c.fleet_id
+#   WHERE f.fleet_name = 'Freight Equipment Leasing'
+# );
 
-valid = (
-    df_db["connect_time"].notna()
-    & df_db["disconnect_time"].notna()
-    & (df_db["disconnect_time"] > df_db["connect_time"])
-    & (df_db["tot_ref_dura"].fillna(0) > 0)
-    & (df_db["dur_check"].fillna(0) > 0)
-    & (df_db["tot_energy"].fillna(0) > 0)
-)
 
-dropped = (~valid).sum()
-print(f"[INFO] Dropping {dropped} rows (zero/invalid duration or energy)")
-
-df_db = df_db[valid].drop(columns=["dur_check"])
-
-# Replace NaT / NaN → None
-df_db = df_db.replace({pd.NaT: None})
-df_db = df_db.where(pd.notna(df_db), None)
-
-print(df_db)
-
-# --- Insert into DB ---
-insert_sql = """
+INSERT_SQL = """
 INSERT INTO public.refuel_inf (
-    charger_id, veh_id, connect_time, disconnect_time,
-    avg_power, tot_energy, tot_ref_dura
+    charger_id,
+    veh_id,
+    connect_time,
+    disconnect_time,
+    avg_power,
+    max_power,
+    tot_energy,
+    start_soc,
+    end_soc,
+    tot_ref_dura
 ) VALUES %s
 ON CONFLICT ON CONSTRAINT uq_refuel_session
 DO UPDATE SET
   disconnect_time = EXCLUDED.disconnect_time,
   avg_power       = EXCLUDED.avg_power,
+  max_power       = EXCLUDED.max_power,
   tot_energy      = EXCLUDED.tot_energy,
+  start_soc       = EXCLUDED.start_soc,
+  end_soc         = EXCLUDED.end_soc,
   tot_ref_dura    = EXCLUDED.tot_ref_dura,
   veh_id          = EXCLUDED.veh_id,
   connect_time    = EXCLUDED.connect_time
 WHERE
   refuel_inf.disconnect_time IS DISTINCT FROM EXCLUDED.disconnect_time OR
   refuel_inf.avg_power       IS DISTINCT FROM EXCLUDED.avg_power       OR
+  refuel_inf.max_power       IS DISTINCT FROM EXCLUDED.max_power       OR
   refuel_inf.tot_energy      IS DISTINCT FROM EXCLUDED.tot_energy      OR
+  refuel_inf.start_soc       IS DISTINCT FROM EXCLUDED.start_soc       OR
+  refuel_inf.end_soc         IS DISTINCT FROM EXCLUDED.end_soc         OR
   refuel_inf.tot_ref_dura    IS DISTINCT FROM EXCLUDED.tot_ref_dura    OR
-  refuel_inf.veh_id          IS DISTINCT FROM EXCLUDED.veh_id OR
+  refuel_inf.veh_id          IS DISTINCT FROM EXCLUDED.veh_id          OR
   refuel_inf.connect_time    IS DISTINCT FROM EXCLUDED.connect_time;
 """
 
-cols = ["charger_id", "veh_id", "connect_time", "disconnect_time",
-        "avg_power", "tot_energy", "tot_ref_dura"]
 
-tuples = [tuple(x) for x in df_db[cols].to_numpy()]
+def to_utc_naive(series: pd.Series) -> pd.Series:
+    dt = pd.to_datetime(series, errors="coerce")
+    dt = dt.dt.tz_localize(LOCAL_TZ, ambiguous="NaT", nonexistent="NaT")
+    return dt.dt.tz_convert("UTC").dt.tz_localize(None)
 
-conn = engine.raw_connection()
-try:
-    with conn.cursor() as cur:
-        extras.execute_values(cur, insert_sql, tuples, template=None, page_size=1000)
-    conn.commit()
-finally:
-    conn.close()
 
-print(f"Upserted {len(tuples)} rows into refuel_inf")
+def parse_duration_minutes(series: pd.Series) -> pd.Series:
+    td = pd.to_timedelta(series, errors="coerce")
+    return (td.dt.total_seconds() / 60.0).round(2)
+
+
+def parse_vehicle_from_id(series: pd.Series) -> pd.Series:
+    # "DSE177 :sha256:..." -> "DSE177"
+    out = series.astype(str).str.split(":", n=1).str[0].str.strip()
+    return out.where(~out.eq("nan"), None)
+
+
+def load_inputs(path: Path) -> pd.DataFrame:
+    sessions = pd.read_excel(path, sheet_name=SESSIONS_SHEET)
+    sessions.columns = sessions.columns.str.strip()
+    return sessions
+
+
+def main() -> None:
+    if not EXCEL_FILE.exists():
+        raise FileNotFoundError(f"Charging file not found: {EXCEL_FILE}")
+
+    sessions = load_inputs(EXCEL_FILE)
+
+    with get_conn() as conn:
+        fleet_id, veh_map = get_fleet_id_and_vehicle_maps(conn)
+        charger_map = get_charger_map(conn, fleet_id)
+
+    total_rows = len(sessions)
+
+    # Vehicle ID in Sessions list is already pre-resolved by fleet.
+    sessions["fleet_vehicle_id_resolved"] = parse_vehicle_from_id(sessions["Vehicle ID"])
+
+    # Keep only connectors defined for this fleet (drops CCS 1 / CSS 1).
+    sessions["connector_norm"] = sessions["Connector"].astype(str).str.strip()
+    sessions["charger_id"] = sessions["connector_norm"].map(charger_map).astype("Int64")
+    sessions = sessions[sessions["charger_id"].notna()].copy()
+    print(f"[INFO] Dropped {total_rows - len(sessions)} rows with invalid connector for {FLEET_NAME}")
+
+    # Keep only rows with valid fleet vehicle mapping.
+    before_vehicle = len(sessions)
+    sessions["veh_id"] = sessions["fleet_vehicle_id_resolved"].map(veh_map).astype("Int64")
+    sessions = sessions[sessions["veh_id"].notna()].copy()
+    print(f"[INFO] Dropped {before_vehicle - len(sessions)} rows with unresolved vehicle ID")
+
+    # Convert local timestamps to UTC before insert.
+    connect_utc = to_utc_naive(sessions["Session start (America/New_York)"])
+    disconnect_utc = to_utc_naive(sessions["Session end (America/New_York)"])
+
+    duration_min = parse_duration_minutes(sessions["Charging duration (hh:mm:ss)"])
+    energy_kwh = pd.to_numeric(sessions["Charged Energy (kWh)"], errors="coerce")
+    peak_power_kw = pd.to_numeric(sessions["Peak power (kW)"], errors="coerce")
+    start_soc = sessions["Battery level at start (%)"].map(normalize_soc)
+    end_soc = sessions["Battery level at end (%)"].map(normalize_soc)
+
+    df_db = pd.DataFrame(
+        {
+            "charger_id": sessions["charger_id"].astype("Int64"),
+            "veh_id": sessions["veh_id"].astype("Int64"),
+            "connect_time": connect_utc,
+            "disconnect_time": disconnect_utc,
+            "tot_ref_dura": duration_min,
+            "tot_energy": energy_kwh,
+            "max_power": peak_power_kw,
+            "start_soc": start_soc,
+            "end_soc": end_soc,
+        }
+    )
+
+    df_db["avg_power"] = (
+        (df_db["tot_energy"] * 60.0 / df_db["tot_ref_dura"])
+        .where((df_db["tot_ref_dura"] > 0) & df_db["tot_energy"].notna())
+        .round(2)
+    )
+
+    valid = (
+        df_db["connect_time"].notna()
+        & df_db["disconnect_time"].notna()
+        & (df_db["disconnect_time"] > df_db["connect_time"])
+        & (df_db["tot_ref_dura"].fillna(0) > 0)
+        & (df_db["tot_energy"].fillna(0) > 0)
+    )
+
+    dropped_invalid = (~valid).sum()
+    if dropped_invalid:
+        print(f"[INFO] Dropping {dropped_invalid} rows with invalid time/duration/energy")
+
+    df_db = df_db[valid].copy()
+
+    cols = [
+        "charger_id",
+        "veh_id",
+        "connect_time",
+        "disconnect_time",
+        "avg_power",
+        "max_power",
+        "tot_energy",
+        "start_soc",
+        "end_soc",
+        "tot_ref_dura",
+    ]
+
+    df_db = df_db.where(pd.notna(df_db), None)
+    rows = [tuple(x) for x in df_db[cols].to_numpy()]
+
+    if not rows:
+        print("[INFO] No valid charging rows to upsert.")
+        return
+
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            extras.execute_values(cur, INSERT_SQL, rows, page_size=1000)
+        conn.commit()
+
+    print(f"[OK] Upserted {len(rows)} rows into refuel_inf")
+
+
+if __name__ == "__main__":
+    main()
