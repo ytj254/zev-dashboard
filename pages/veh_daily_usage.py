@@ -14,6 +14,7 @@ metric_options = [
     {'label': 'Final SOC', 'value': 'final_soc'},
     {'label': 'SOC Used', 'value': 'tot_soc_used'},
     {'label': 'Idle Time (h)', 'value': 'idle_time'},
+    {'label': 'Peak Payload (lbs)', 'value': 'peak_payload'},
     {'label': 'Energy Efficiency (kWh/mi)', 'value': 'efficiency'},
 ]
 
