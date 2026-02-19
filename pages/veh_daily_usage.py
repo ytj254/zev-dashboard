@@ -14,7 +14,7 @@ metric_options = [
     {'label': 'Final SOC', 'value': 'final_soc'},
     {'label': 'SOC Used', 'value': 'tot_soc_used'},
     {'label': 'Idle Time (h)', 'value': 'idle_time'},
-    {'label': 'Peak Payload (lbs)', 'value': 'peak_payload'},
+    {'label': 'Energy Efficiency (kWh/mi)', 'value': 'efficiency'},
 ]
 
 def load_daily_usage_data():
@@ -116,6 +116,59 @@ def _filter_daily(records, fleets, makes, models, classes, veh_ids, start_date, 
     return df
 
 
+def _resolve_efficiency_rows(df):
+    out = df.copy()
+    dist = pd.to_numeric(out.get("tot_dist"), errors="coerce")
+    energy = pd.to_numeric(out.get("tot_energy"), errors="coerce")
+    reported = (
+        pd.to_numeric(out["efficiency"], errors="coerce")
+        if "efficiency" in out.columns
+        else pd.Series(index=out.index, dtype="float64")
+    )
+    # Reference rule: apply distance filter first for all efficiency paths.
+    # Only rows with tot_dist >= 10 are eligible for efficiency.
+    dist_ok = dist >= 10
+    computed = pd.Series(index=out.index, dtype="float64")
+    # Fallback rule: compute efficiency only when not reported and inputs are valid.
+    # efficiency = tot_energy / tot_dist, requiring positive energy and valid distance.
+    compute_mask = dist_ok & (energy > 0) & pd.notna(energy) & pd.notna(dist)
+    computed.loc[compute_mask] = energy.loc[compute_mask] / dist.loc[compute_mask]
+    # Preferred source rule: use reported efficiency when present; else use computed.
+    out["efficiency_resolved"] = reported.where(dist_ok & pd.notna(reported), computed)
+    out["tot_dist_num"] = dist
+    # Shared validity flag used by daily chart and fleet summary table.
+    out["efficiency_valid"] = dist_ok & pd.notna(out["efficiency_resolved"])
+    return out
+
+
+def _build_daily_efficiency(df):
+    eff_rows = _resolve_efficiency_rows(df)
+    eff_rows = eff_rows[eff_rows["efficiency_valid"]].copy()
+    if eff_rows.empty:
+        return pd.DataFrame(columns=["date", "efficiency"])
+
+    # Aggregate rule: distance-weighted daily efficiency.
+    eff_rows["weighted_eff_num"] = eff_rows["efficiency_resolved"] * eff_rows["tot_dist_num"]
+    eff_df = (
+        eff_rows.groupby("date", as_index=False)
+        .agg({"weighted_eff_num": "sum", "tot_dist_num": "sum"})
+    )
+    eff_df["efficiency"] = eff_df["weighted_eff_num"] / eff_df["tot_dist_num"]
+    return eff_df[["date", "efficiency"]]
+
+
+def _safe_eff(group):
+    eff_rows = _resolve_efficiency_rows(group)
+    eff_rows = eff_rows[eff_rows["efficiency_valid"]]
+    if eff_rows.empty:
+        return None
+    dist_sum = eff_rows["tot_dist_num"].sum(skipna=True)
+    if dist_sum and dist_sum > 0:
+        # Same aggregation rule as daily efficiency chart (distance-weighted).
+        return (eff_rows["efficiency_resolved"] * eff_rows["tot_dist_num"]).sum(skipna=True) / dist_sum
+    return None
+
+
 @callback(
     Output('daily-usage-graph', 'figure'),
     Output('efficiency-graph', 'figure'),
@@ -132,11 +185,20 @@ def _filter_daily(records, fleets, makes, models, classes, veh_ids, start_date, 
 def update_figures(fleets, makes, models, classes, veh_ids, start_date, end_date, metric, records):
     df = _filter_daily(records, fleets, makes, models, classes, veh_ids, start_date, end_date)
 
-    if df.empty or metric not in df.columns:
+    if df.empty or (metric != "efficiency" and metric not in df.columns):
         return empty_fig("No data available"), empty_fig("No data available")
 
     y_label = next((opt['label'] for opt in metric_options if opt['value'] == metric), metric)
-    fig = px.bar(df, x="date", y=metric, title=f"{y_label} per Day")
+    eff_df = _build_daily_efficiency(df)
+
+    if metric == "efficiency":
+        if eff_df.empty:
+            return empty_fig("No efficiency data"), empty_fig("No efficiency data")
+        fig_source = eff_df
+    else:
+        fig_source = df
+
+    fig = px.bar(fig_source, x="date", y=metric, title=f"{y_label} per Day")
     fig.update_layout(
         yaxis_title=None,
         xaxis_title="Date",
@@ -146,18 +208,6 @@ def update_figures(fleets, makes, models, classes, veh_ids, start_date, end_date
         xaxis=dict(gridcolor=GRID_COLOR),
         yaxis=dict(gridcolor=GRID_COLOR)
     )
-
-    eff_source = df[(df["tot_dist"] >= 10) & (df["tot_energy"] > 0)]
-    eff_df = (
-        eff_source.groupby("date")
-        .agg({"tot_energy": "sum", "tot_dist": "sum"})
-        .reset_index()
-    )
-    eff_df["efficiency"] = eff_df.apply(
-        lambda r: r.tot_energy / r.tot_dist if pd.notna(r.tot_energy) and pd.notna(r.tot_dist) and r.tot_dist != 0 else None,
-        axis=1
-    )
-    eff_df = eff_df[pd.notna(eff_df["efficiency"])]
 
     if eff_df.empty:
         eff_fig = empty_fig("No efficiency data")
@@ -196,14 +246,6 @@ def update_kpis_and_table(_, records):
         s = series.dropna()
         return s.mean() if not s.empty else None
 
-    def safe_eff(group):
-        eff_src = group[(group["tot_dist"] > 0) & (group["tot_energy"] > 0)]
-        dist_sum = eff_src["tot_dist"].sum(skipna=True)
-        if dist_sum and dist_sum > 0:
-            energy_sum = eff_src["tot_energy"].sum(skipna=True)
-            return energy_sum / dist_sum
-        return None
-
     summary = []
     for fleet_name, group in df.groupby("fleet"):
         dist_positive = group[group["tot_dist"] > 0]["tot_dist"]
@@ -214,7 +256,7 @@ def update_kpis_and_table(_, records):
             "Total Distance (mi)": round(group["tot_dist"].sum(), 2),
             "Daily Distance (mi)": safe_mean(dist_positive),
             "Daily Energy (kWh)": safe_mean(energy_positive),
-            "Energy Efficiency (kWh/mi)": safe_eff(group),
+            "Energy Efficiency (kWh/mi)": _safe_eff(group),
             "Daily SOC Used (%)": safe_mean(group[group["tot_soc_used"] > 0]["tot_soc_used"]),
             "Daily Driving Time (hr)": safe_mean(dura_positive),
             "Daily Idle Time (hr)": safe_mean(group["idle_time"]),
