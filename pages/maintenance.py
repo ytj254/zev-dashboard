@@ -194,6 +194,8 @@ def _fmt_money(val):
 
 
 def render_fleet_table(tbl: pd.DataFrame):
+    header_style = {"padding": "0.3rem 0.45rem", "fontSize": "0.82rem", "whiteSpace": "nowrap"}
+    cell_style = {"padding": "0.22rem 0.45rem", "fontSize": "0.82rem", "lineHeight": "1.15"}
     headers = [
         "Fleet",
         "Asset type",
@@ -207,13 +209,17 @@ def render_fleet_table(tbl: pd.DataFrame):
     ]
     if tbl.empty:
         return dbc.Table(
-            [html.Thead(html.Tr([html.Th(h) for h in headers])), html.Tbody([html.Tr([html.Td("No data", colSpan=len(headers))])])],
+            [
+                html.Thead(html.Tr([html.Th(h, style=header_style) for h in headers])),
+                html.Tbody([html.Tr([html.Td("No data", colSpan=len(headers), style=cell_style)])]),
+            ],
             bordered=True,
             hover=True,
             responsive=True,
             striped=True,
             size="sm",
             color="dark",
+            className="mb-0",
         )
 
     body_rows = []
@@ -223,24 +229,30 @@ def render_fleet_table(tbl: pd.DataFrame):
         for i, row in enumerate(group_rows):
             cells = []
             if i == 0:
-                cells.append(html.Td(fleet_name, rowSpan=len(group_rows), style={"verticalAlign": "middle", "fontWeight": "600"}))
+                cells.append(
+                    html.Td(
+                        fleet_name,
+                        rowSpan=len(group_rows),
+                        style={**cell_style, "verticalAlign": "middle", "fontWeight": "600"},
+                    )
+                )
             cells.extend(
                 [
-                    html.Td(row.get("Asset type", "-")),
-                    html.Td(_fmt_int(row.get("Events"))),
-                    html.Td(_fmt_money(row.get("Total cost"))),
-                    html.Td(_fmt_money(row.get("Avg total cost"))),
-                    html.Td(_fmt_money(row.get("Avg parts cost"))),
-                    html.Td(_fmt_money(row.get("Avg labor cost"))),
-                    html.Td(_fmt_money(row.get("Avg added cost"))),
-                    html.Td(_fmt_int(row.get("Avg miles between services"))),
+                    html.Td(row.get("Asset type", "-"), style=cell_style),
+                    html.Td(_fmt_int(row.get("Events")), style=cell_style),
+                    html.Td(_fmt_money(row.get("Total cost")), style=cell_style),
+                    html.Td(_fmt_money(row.get("Avg total cost")), style=cell_style),
+                    html.Td(_fmt_money(row.get("Avg parts cost")), style=cell_style),
+                    html.Td(_fmt_money(row.get("Avg labor cost")), style=cell_style),
+                    html.Td(_fmt_money(row.get("Avg added cost")), style=cell_style),
+                    html.Td(_fmt_int(row.get("Avg miles between services")), style=cell_style),
                 ]
             )
             body_rows.append(html.Tr(cells))
 
     return dbc.Table(
         [
-            html.Thead(html.Tr([html.Th(h) for h in headers])),
+            html.Thead(html.Tr([html.Th(h, style=header_style) for h in headers])),
             html.Tbody(body_rows),
         ],
         bordered=True,
@@ -249,6 +261,7 @@ def render_fleet_table(tbl: pd.DataFrame):
         striped=True,
         size="sm",
         color="dark",
+        className="mb-0",
     )
 
 

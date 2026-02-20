@@ -289,9 +289,11 @@ def update_map_and_summary(fleet_name, vehicle_id, start_date, end_date):
         ["Avg Speed (mph)", f"{df['speed'].mean():.2f}"],
         ["Max Speed (mph)", f"{df['speed'].max():.2f}"]
     ]
+    label_style = {"padding": "0.22rem 0.45rem", "fontSize": "0.82rem", "fontWeight": "600", "whiteSpace": "nowrap"}
+    value_style = {"padding": "0.22rem 0.45rem", "fontSize": "0.82rem", "lineHeight": "1.15"}
     summary_table = dbc.Table(
         html.Tbody(
-            [html.Tr([html.Td(k, style={"fontWeight": "bold"}), html.Td(v)])
+            [html.Tr([html.Td(k, style=label_style), html.Td(v, style=value_style)])
             for k, v in summary_data]
         ),
         bordered=True,
@@ -299,7 +301,8 @@ def update_map_and_summary(fleet_name, vehicle_id, start_date, end_date):
         hover=True,
         responsive=True,
         striped=True,
-        size="sm"
+        size="sm",
+        className="mb-0",
     )
     
     # Build trajectory polylines - group by fleet and vehicle

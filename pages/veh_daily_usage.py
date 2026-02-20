@@ -1,4 +1,4 @@
-from dash import register_page, html, dcc, dash_table, Input, Output, callback, State
+from dash import register_page, html, dcc, Input, Output, callback, State
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
@@ -43,12 +43,7 @@ layout = html.Div([
 
     html.Div([
         html.H4("Daily Usage Summary by Fleet", style={"color": TEXT_COLOR}),
-        dash_table.DataTable(
-            id='fleet-summary-table',
-            style_table={'overflowX': 'auto'},
-            style_cell={'color': 'white', 'backgroundColor': DARK_BG},
-            style_header={'backgroundColor': '#1f1f1f', 'color': 'white', 'fontWeight': 'bold'}
-        )
+        html.Div(id="fleet-summary-table")
     ], style={"marginBottom": "2rem"}),
 
     # Filters
@@ -232,16 +227,24 @@ def update_figures(fleets, makes, models, classes, veh_ids, start_date, end_date
     Output("kpi-daily-energy", "children"),
     Output("kpi-daily-driving", "children"),
     Output("kpi-daily-soc", "children"),
-    Output("fleet-summary-table", "data"),
-    Output("fleet-summary-table", "columns"),
+    Output("fleet-summary-table", "children"),
     Input("fleet-summary-table", "id"),
     State("daily-usage-store", "data")   # <-- Add this line
 )
 
 def update_kpis_and_table(_, records):
+    header_style = {"padding": "0.3rem 0.45rem", "fontSize": "0.82rem", "whiteSpace": "nowrap"}
+    cell_style = {"padding": "0.22rem 0.45rem", "fontSize": "0.82rem", "lineHeight": "1.15"}
     df = pd.DataFrame(records)
     if df.empty:
-        return "0", "0", "0", "0", "0", [], []
+        return "0", "0", "0", "0", "0", dbc.Table(
+            [html.Tbody([html.Tr([html.Td("No data available", colSpan=8, style={**cell_style, "textAlign": "center"})])])],
+            bordered=True,
+            hover=True,
+            responsive=True,
+            className="table table-dark mb-0",
+            size="sm",
+        )
 
     def safe_mean(series):
         s = series.dropna()
@@ -281,6 +284,20 @@ def update_kpis_and_table(_, records):
         else:
             table_df[col] = table_df[col].apply(fmt)
 
+    header = html.Thead(html.Tr([html.Th(col, style=header_style) for col in table_df.columns]))
+    body = html.Tbody([
+        html.Tr([html.Td(row[col], style=cell_style) for col in table_df.columns])
+        for _, row in table_df.iterrows()
+    ])
+    table_ui = dbc.Table(
+        [header, body],
+        bordered=True,
+        hover=True,
+        responsive=True,
+        className="table table-dark mb-0",
+        size="sm",
+    )
+
     df_summary_kpi = df_summary.fillna(0)
     return (
         f"{df_summary_kpi['Total Distance (mi)'].sum():.2f}",
@@ -288,6 +305,5 @@ def update_kpis_and_table(_, records):
         f"{df_summary_kpi['Daily Energy (kWh)'].mean():.2f}",
         f"{df_summary_kpi['Daily Driving Time (hr)'].mean():.2f}",
         f"{df_summary_kpi['Daily SOC Used (%)'].mean():.2f}",
-        table_df.to_dict("records"),
-        [{"name": col, "id": col} for col in table_df.columns]
+        table_ui,
     )

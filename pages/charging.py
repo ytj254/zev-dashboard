@@ -1,4 +1,4 @@
-from dash import register_page, html, dcc, dash_table, Input, Output, callback
+from dash import register_page, html, dcc, Input, Output, callback
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
@@ -68,12 +68,7 @@ layout = html.Div([
     ], className="mb-4"),
 
     html.H4("Charging Events Summary by Fleet and Charger Type"),
-    dash_table.DataTable(
-        id='summary-table-charging',
-        style_table={'overflowX': 'auto'},
-        style_cell={'color': 'white', 'backgroundColor': '#303030'},
-        style_header={'backgroundColor': '#1f1f1f', 'color': 'white', 'fontWeight': 'bold'}
-    ),
+    html.Div(id="summary-table-charging"),
     
     html.Div([
         dcc.Dropdown(id="fleet-filter", placeholder="Select Fleet", style=DROPDOWN_STYLE),
@@ -97,11 +92,12 @@ layout = html.Div([
     Output("kpi-avg-energy", "children"),
     Output("kpi-avg-chg-time", "children"),
     Output("kpi-avg-conn-time", "children"),
-    Output("summary-table-charging", "data"),
-    Output("summary-table-charging", "columns"),
+    Output("summary-table-charging", "children"),
     Input("summary-table-charging", "id")  # dummy input to trigger once
 )
 def update_summary(_):
+    header_style = {"padding": "0.3rem 0.45rem", "fontSize": "0.82rem", "whiteSpace": "nowrap"}
+    cell_style = {"padding": "0.22rem 0.45rem", "fontSize": "0.82rem", "lineHeight": "1.15"}
     df = load_charging_data()
     kpi1 = len(df)
     kpi2 = round(df["tot_energy"].mean(), 2) if not df.empty else 0
@@ -129,10 +125,23 @@ def update_summary(_):
     }
 
     summary.rename(columns=col_name_map, inplace=True)
-    columns = [{"name": col_name_map.get(col, col), "id": col} for col in summary.columns]
-    data = summary.to_dict("records")
+    display_cols = [col_name_map.get(col, col) for col in summary.columns]
+    summary.columns = display_cols
+    header = html.Thead(html.Tr([html.Th(col, style=header_style) for col in summary.columns]))
+    body = html.Tbody([
+        html.Tr([html.Td(row[col], style=cell_style) for col in summary.columns])
+        for _, row in summary.iterrows()
+    ])
+    table_ui = dbc.Table(
+        [header, body],
+        bordered=True,
+        hover=True,
+        responsive=True,
+        className="table table-dark mb-0",
+        size="sm",
+    )
 
-    return kpi1, kpi2, kpi3, kpi4, data, columns
+    return kpi1, kpi2, kpi3, kpi4, table_ui
 
 # === Dropdown Options Callbacks ===
 

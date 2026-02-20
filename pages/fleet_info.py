@@ -1,4 +1,4 @@
-from dash import register_page, html, Output, Input, callback, ALL, dash_table
+from dash import register_page, html, Output, Input, callback, ALL
 import dash_leaflet as dl
 import dash_bootstrap_components as dbc
 from dash import ctx
@@ -50,6 +50,17 @@ markers = [
     for _, row in df_fleet.iterrows()
 ]
 
+fleet_summary_df = df_fleet[[
+    "fleet_name", "fleet_size", "zev_grant", "charger_grant", "vendor_name", "depot_adr"
+]].rename(columns={
+    "fleet_name": "Fleet Name",
+    "fleet_size": "Fleet Size",
+    "zev_grant": "Granted ZEVs",
+    "charger_grant": "Granted Chargers",
+    "vendor_name": "Vendor",
+    "depot_adr": "Depot Address",
+})
+
 layout = dbc.Row([
     # KPI Cards
     dbc.Row([
@@ -67,24 +78,19 @@ layout = dbc.Row([
         ]))),
     ], className="mb-4"),
 
-    # Summary Table
+# Summary Table
     html.Div([
         html.H4("Fleet Summary Table"),
-        dash_table.DataTable(
-            columns=[
-                {"name": "Fleet Name", "id": "fleet_name"},
-                {"name": "Fleet Size", "id": "fleet_size"},
-                {"name": "Granted ZEVs", "id": "zev_grant"},
-                {"name": "Granted Chargers", "id": "charger_grant"},
-                {"name": "Vendor", "id": "vendor_name"},
-                {"name": "Depot Address", "id": "depot_adr"},
-            ],
-            data=df_fleet[[
-                "fleet_name", "fleet_size", "zev_grant", "charger_grant", "vendor_name", "depot_adr"
-            ]].to_dict("records"),
-            style_table={'overflowX': 'auto'},
-            style_cell={'color': 'white', 'backgroundColor': '#303030'},
-            style_header={'backgroundColor': '#1f1f1f', 'color': 'white', 'fontWeight': 'bold'}
+        dbc.Table.from_dataframe(
+            fleet_summary_df,
+            striped=True,
+            bordered=True,
+            hover=True,
+            responsive=True,
+            size="sm",
+            className="table table-dark mb-0",
+            style={"fontSize": "0.82rem", "lineHeight": "1.15"},
+            index=False,
         )
     ], style={"marginBottom": "2rem"}),
 
