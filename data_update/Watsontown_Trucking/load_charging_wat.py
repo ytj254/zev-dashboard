@@ -1,18 +1,41 @@
 import pandas as pd
 import psycopg2.extras as extras
 import sys, os
+from datetime import time as dt_time
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data_update.common_data_update import engine
 
 # --- Config ---
-CSV_PATH = "D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Watsontown Trucking\Charging & Telematics_Qtr 3 2025\WATW ABB Charger Session - Wattson.csv"
+FOLDER_PATH = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Watsontown Trucking"
+FILE_PATH = r"\2025 - Qtr 4\Charging & Telematics\WATW DEP EV Grant - Wattson - Q4 2025.xlsx"
+CSV_PATH = FOLDER_PATH + FILE_PATH
 
-# ---------- LOAD CSV ----------
-df = pd.read_csv(CSV_PATH)
+# ---------- LOAD FILE ----------
+_ext = os.path.splitext(CSV_PATH)[1].lower()
+if _ext in (".xlsx", ".xls"):
+    df = pd.read_excel(CSV_PATH)
+else:
+    # Fallback encodings for vendor CSV exports.
+    try:
+        df = pd.read_csv(CSV_PATH, encoding="utf-8")
+    except UnicodeDecodeError:
+        df = pd.read_csv(CSV_PATH, encoding="cp1252")
 # print(df)
 
 # Construct charger_id
 df["charger_id_str"] = df["Serial Number"].astype(str).str.strip() + "-" + df["Connector Number"].astype(str).str.strip()
+
+# Construct vehicle key from report (Tractor ID or Tractor Number only)
+def _normalize_vehicle_key(v):
+    if pd.isna(v):
+        return None
+    s = str(v).strip().upper().replace(" ", "")
+    s = s.replace("?", "")
+    return s if s else None
+
+tractor_id = df.get("Tractor ID", pd.Series([None] * len(df))).apply(_normalize_vehicle_key)
+tractor_num = df.get("Tractor Number", pd.Series([None] * len(df))).apply(_normalize_vehicle_key)
+df["veh_key"] = tractor_id.where(tractor_id.notna(), tractor_num)
 
 # Parse times
 df["refuel_start"] = pd.to_datetime(df["Session Start Time"], errors="coerce", dayfirst=False)
@@ -21,7 +44,24 @@ df["refuel_end"]   = pd.to_datetime(df["Session Stop Time"],  errors="coerce", d
 
 # Numeric conversions
 df["tot_energy"]   = pd.to_numeric(df["Energy Delivered (kWh)"], errors="coerce")
-df["tot_ref_dura"] = (pd.to_timedelta(df["Duration"], errors="coerce").dt.total_seconds() / 60)
+
+def _duration_to_minutes(v):
+    if pd.isna(v):
+        return None
+    if isinstance(v, pd.Timedelta):
+        return v.total_seconds() / 60.0
+    if isinstance(v, dt_time):
+        return v.hour * 60.0 + v.minute + (v.second / 60.0) + (v.microsecond / 60000000.0)
+    if isinstance(v, str):
+        td = pd.to_timedelta(v, errors="coerce")
+        return None if pd.isna(td) else td.total_seconds() / 60.0
+    if isinstance(v, (int, float)):
+        # Excel may store duration as fraction of day.
+        return float(v) * 24.0 * 60.0
+    td = pd.to_timedelta(v, errors="coerce")
+    return None if pd.isna(td) else td.total_seconds() / 60.0
+
+df["tot_ref_dura"] = df["Duration"].apply(_duration_to_minutes)
 df["start_soc"]    = pd.to_numeric(df["Battery State Of Charge At Session Start"].astype(str).str.replace("%", ""), errors="coerce") / 100
 df["end_soc"]      = pd.to_numeric(df["Battery State Of Charge At Session Stop"].astype(str).str.replace("%", ""), errors="coerce") / 100
 
@@ -49,16 +89,20 @@ df["avg_power"] = df.apply(
 # Map charger string -> integer ID
 with engine.connect() as conn:
     charger_map = pd.read_sql("SELECT id, charger FROM charger", conn)
+    veh_map_df = pd.read_sql("SELECT id, fleet_vehicle_id FROM vehicle", conn)
 charger_map = dict(zip(charger_map["charger"], charger_map["id"]))
+veh_map = dict(zip(veh_map_df["fleet_vehicle_id"].astype(str).str.upper(), veh_map_df["id"]))
 df["charger_id"] = df["charger_id_str"].map(charger_map).astype("Int64")
+df["veh_id"] = df["veh_key"].map(veh_map).astype("Int64")
 
 before = len(df)
 df = df[df["charger_id"].notna()].copy()
 print(f"[INFO] Dropped {before - len(df)} rows (chargers not found in DB)")
+print(f"[INFO] Vehicle not mapped rows (veh_id=NULL): {int(df['veh_id'].isna().sum())}")
 
 # ---------- UPLOAD ----------
 df_db = df[[
-    "charger_id", "refuel_start", "refuel_end", "avg_power",
+    "charger_id", "veh_id", "refuel_start", "refuel_end", "avg_power",
     "tot_energy", "start_soc", "end_soc", "tot_ref_dura"
 ]].copy()
 
@@ -70,11 +114,12 @@ df_db = df_db.where(pd.notna(df_db), None)
 
 insert_sql = """
 INSERT INTO public.refuel_inf (
-    charger_id, refuel_start, refuel_end, avg_power,
+    charger_id, veh_id, refuel_start, refuel_end, avg_power,
     tot_energy, start_soc, end_soc, tot_ref_dura
 ) VALUES %s
 ON CONFLICT ON CONSTRAINT uq_refuel_session
 DO UPDATE SET
+  veh_id          = EXCLUDED.veh_id,
   refuel_start    = EXCLUDED.refuel_start,
   refuel_end      = EXCLUDED.refuel_end,
   avg_power       = EXCLUDED.avg_power,
