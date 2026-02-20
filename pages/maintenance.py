@@ -1,5 +1,5 @@
 # maintenance.py
-from dash import register_page, html, dcc, dash_table, Input, Output, State, callback, no_update
+from dash import register_page, html, dcc, Input, Output, State, callback, no_update
 import dash_bootstrap_components as dbc
 import pandas as pd
 import numpy as np
@@ -130,7 +130,7 @@ def kpi_block_global(df_all: pd.DataFrame):
 def compute_fleet_table(df_scope: pd.DataFrame) -> pd.DataFrame:
     if df_scope.empty:
         return pd.DataFrame(columns=[
-            "Fleet", "Events", "Vehicle events", "Charger events",
+            "Fleet", "Asset type", "Events",
             "Total cost", "Avg total cost", "Avg parts cost", "Avg labor cost", "Avg added cost",
             "Avg miles between services"
         ])
@@ -149,60 +149,112 @@ def compute_fleet_table(df_scope: pd.DataFrame) -> pd.DataFrame:
     rows = []
     for fleet, g in grp:
         fleet_name = fleet if pd.notna(fleet) else "Unspecified"
-        g_cost = df_cost[df_cost["fleet_name"] == fleet]
-        events = len(g)
-        veh_events = int(g["veh_id"].notna().sum())
-        chg_events = int(g["charger_id"].notna().sum())
-
-        total_cost = float(g_cost["total_cost"].sum()) if not g_cost.empty else np.nan
-        avg_total = float(g_cost["total_cost"].mean()) if not g_cost.empty else np.nan
-        avg_parts = float(g_cost["parts_cost"].mean()) if not g_cost.empty else np.nan
-        avg_labor = float(g_cost["labor_cost"].mean()) if not g_cost.empty else np.nan
-        avg_added = float(g_cost["add_cost"].mean()) if not g_cost.empty else np.nan
-
-        avg_miles = fleet_avg_miles(g)
-
+        # Vehicle row
+        g_vehicle = g[g["veh_id"].notna()]
+        g_vehicle_cost = df_cost[(df_cost["fleet_name"] == fleet) & (df_cost["veh_id"].notna())]
         rows.append({
             "Fleet": fleet_name,
-            "Events": events,
-            "Vehicle events": veh_events,
-            "Charger events": chg_events,
-            "Total cost": total_cost,
-            "Avg total cost": avg_total,
-            "Avg parts cost": avg_parts,
-            "Avg labor cost": avg_labor,
-            "Avg added cost": avg_added,
-            "Avg miles between services": avg_miles
+            "Asset type": "Vehicle",
+            "Events": len(g_vehicle),
+            "Total cost": float(g_vehicle_cost["total_cost"].sum()) if not g_vehicle_cost.empty else np.nan,
+            "Avg total cost": float(g_vehicle_cost["total_cost"].mean()) if not g_vehicle_cost.empty else np.nan,
+            "Avg parts cost": float(g_vehicle_cost["parts_cost"].mean()) if not g_vehicle_cost.empty else np.nan,
+            "Avg labor cost": float(g_vehicle_cost["labor_cost"].mean()) if not g_vehicle_cost.empty else np.nan,
+            "Avg added cost": float(g_vehicle_cost["add_cost"].mean()) if not g_vehicle_cost.empty else np.nan,
+            "Avg miles between services": fleet_avg_miles(g_vehicle),
+        })
+
+        # Charger row (includes station-level charger rows tagged by maint_ob == 2)
+        g_charger = g[(g["charger_id"].notna()) | (g["maint_ob"] == 2)]
+        g_charger_cost = df_cost[(df_cost["fleet_name"] == fleet) & ((df_cost["charger_id"].notna()) | (df_cost["maint_ob"] == 2))]
+        rows.append({
+            "Fleet": fleet_name,
+            "Asset type": "Charger",
+            "Events": len(g_charger),
+            "Total cost": float(g_charger_cost["total_cost"].sum()) if not g_charger_cost.empty else np.nan,
+            "Avg total cost": float(g_charger_cost["total_cost"].mean()) if not g_charger_cost.empty else np.nan,
+            "Avg parts cost": float(g_charger_cost["parts_cost"].mean()) if not g_charger_cost.empty else np.nan,
+            "Avg labor cost": float(g_charger_cost["labor_cost"].mean()) if not g_charger_cost.empty else np.nan,
+            "Avg added cost": float(g_charger_cost["add_cost"].mean()) if not g_charger_cost.empty else np.nan,
+            "Avg miles between services": np.nan,
         })
 
     out = pd.DataFrame(rows)
-    # Sort by Fleet for consistency
-    out = out.sort_values("Fleet", na_position="last")
+    out["asset_order"] = out["Asset type"].map({"Vehicle": 0, "Charger": 1}).fillna(99)
+    out = out.sort_values(["Fleet", "asset_order"], na_position="last").drop(columns=["asset_order"])
     return out
 
 
-def fleet_table_component():
-    return dash_table.DataTable(
-        id="maint-fleet-table",
-        columns=[
-            {"name": "Fleet", "id": "Fleet"},
-            {"name": "Events", "id": "Events", "type": "numeric"},
-            {"name": "Vehicle events", "id": "Vehicle events", "type": "numeric"},
-            {"name": "Charger events", "id": "Charger events", "type": "numeric"},
-            {"name": "Total cost", "id": "Total cost", "type": "numeric", "format": {"locale": {"symbol": ["$", ""]}}},
-            {"name": "Avg total cost", "id": "Avg total cost", "type": "numeric", "format": {"locale": {"symbol": ["$", ""]}}},
-            {"name": "Avg parts cost", "id": "Avg parts cost", "type": "numeric", "format": {"locale": {"symbol": ["$", ""]}}},
-            {"name": "Avg labor cost", "id": "Avg labor cost", "type": "numeric", "format": {"locale": {"symbol": ["$", ""]}}},
-            {"name": "Avg added cost", "id": "Avg added cost", "type": "numeric", "format": {"locale": {"symbol": ["$", ""]}}},
-            {"name": "Avg miles between services", "id": "Avg miles between services", "type": "numeric"},
+def _fmt_int(val):
+    return "-" if pd.isna(val) else f"{int(round(float(val))):,}"
+
+
+def _fmt_money(val):
+    return "-" if pd.isna(val) else f"${int(round(float(val))):,}"
+
+
+def render_fleet_table(tbl: pd.DataFrame):
+    headers = [
+        "Fleet",
+        "Asset type",
+        "Events",
+        "Total cost",
+        "Avg total cost",
+        "Avg parts cost",
+        "Avg labor cost",
+        "Avg added cost",
+        "Avg miles between services",
+    ]
+    if tbl.empty:
+        return dbc.Table(
+            [html.Thead(html.Tr([html.Th(h) for h in headers])), html.Tbody([html.Tr([html.Td("No data", colSpan=len(headers))])])],
+            bordered=True,
+            hover=True,
+            responsive=True,
+            striped=True,
+            size="sm",
+            color="dark",
+        )
+
+    body_rows = []
+    for fleet, g in tbl.groupby("Fleet", sort=False, dropna=False):
+        fleet_name = "Unspecified" if pd.isna(fleet) else str(fleet)
+        group_rows = g.to_dict("records")
+        for i, row in enumerate(group_rows):
+            cells = []
+            if i == 0:
+                cells.append(html.Td(fleet_name, rowSpan=len(group_rows), style={"verticalAlign": "middle", "fontWeight": "600"}))
+            cells.extend(
+                [
+                    html.Td(row.get("Asset type", "-")),
+                    html.Td(_fmt_int(row.get("Events"))),
+                    html.Td(_fmt_money(row.get("Total cost"))),
+                    html.Td(_fmt_money(row.get("Avg total cost"))),
+                    html.Td(_fmt_money(row.get("Avg parts cost"))),
+                    html.Td(_fmt_money(row.get("Avg labor cost"))),
+                    html.Td(_fmt_money(row.get("Avg added cost"))),
+                    html.Td(_fmt_int(row.get("Avg miles between services"))),
+                ]
+            )
+            body_rows.append(html.Tr(cells))
+
+    return dbc.Table(
+        [
+            html.Thead(html.Tr([html.Th(h) for h in headers])),
+            html.Tbody(body_rows),
         ],
-        data=[],
-        style_table={"overflowX": "auto"},
-        style_cell={"backgroundColor": DARK_BG, "color": TEXT_COLOR, "border": f"1px solid {GRID_COLOR}"},
-        style_header={"fontWeight": "600"},
-        sort_action="native",
-        page_size=20,
+        bordered=True,
+        hover=True,
+        responsive=True,
+        striped=True,
+        size="sm",
+        color="dark",
     )
+
+
+def fleet_table_component():
+    initial_tbl = compute_fleet_table(_df)
+    return html.Div(id="maint-fleet-table", children=render_fleet_table(initial_tbl))
 
 
 # ---------- Block 3 (Pies + Filters) ----------
@@ -365,9 +417,11 @@ def apply_filters(df, fleets_sel, asset_type, asset_ids, start_date, end_date):
 
     # Asset type + IDs (optional)
     if asset_type == "vehicle":
+        d = d[d["veh_id"].notna()]
         if asset_ids:
             d = d[d["veh_id"].isin(asset_ids)]
     elif asset_type == "charger":
+        d = d[(d["charger_id"].notna()) | (d["maint_ob"] == 2)]
         if asset_ids:
             d = d[d["charger_id"].isin(asset_ids)]
 
@@ -381,7 +435,7 @@ def apply_filters(df, fleets_sel, asset_type, asset_ids, start_date, end_date):
 
 
 @callback(
-    Output("maint-fleet-table", "data"),
+    Output("maint-fleet-table", "children"),
     Output("maint-pie-category", "figure"),
     Output("maint-pie-warranty", "figure"),
     Output("maint-pie-location", "figure"),
@@ -400,15 +454,7 @@ def update_block2_block3(fleets_sel, asset_type, asset_ids, start_date, end_date
 
     # ---- Block 2: Fleet table ----
     tbl = compute_fleet_table(_df)
-    # Format money columns for display
-    money_cols = ["Total cost", "Avg total cost", "Avg parts cost", "Avg labor cost", "Avg added cost"]
-    for c in money_cols:
-        if c in tbl:
-            tbl[c] = tbl[c].apply(lambda x: None if pd.isna(x) else round(float(x), 0))
-    if "Avg miles between services" in tbl:
-        tbl["Avg miles between services"] = tbl["Avg miles between services"].apply(
-            lambda x: None if pd.isna(x) else round(float(x), 0)
-        )
+    fleet_table_ui = render_fleet_table(tbl)
 
     # ---- Block 3: Pies ----
     # Category
@@ -424,4 +470,4 @@ def update_block2_block3(fleets_sel, asset_type, asset_ids, start_date, end_date
     loc_counts = d.groupby("maint_loc_bucket", dropna=False).size().reset_index(name="count").rename(columns={"maint_loc_bucket": "label"})
     fig_loc = make_pie("By Maintenance Location", labels=loc_counts["label"], values=loc_counts["count"]) if not loc_counts.empty else empty_fig("By Maintenance Location")
 
-    return tbl.to_dict("records"), fig_cat, fig_war, fig_loc
+    return fleet_table_ui, fig_cat, fig_war, fig_loc
