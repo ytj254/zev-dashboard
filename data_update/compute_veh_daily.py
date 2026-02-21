@@ -2,7 +2,7 @@
 Compute daily vehicle usage from telematics and upsert veh_daily rows (overwrite existing).
 
 Defaults:
-    - Fleets: 2 and 3
+    - Fleets: 2 Watsontown Trucking
     - Idle gap threshold: 15 minutes (used to separate trips)
 """
 
@@ -29,8 +29,8 @@ def parse_args() -> argparse.Namespace:
         "--fleet-ids",
         type=int,
         nargs="+",
-        default=[2, 3],
-        help="Fleet IDs to process (default: 2 and 3).",
+        default=[2],
+        help="Fleet IDs to process (default: 2).",
     )
     parser.add_argument(
         "--idle-threshold-minutes",
@@ -119,7 +119,9 @@ def aggregate_daily(rows, idle_threshold_minutes: float) -> Dict[Tuple[int, dt.d
                     drive_sec += dt_sec
                     if not prev_moving and accumulated_stop >= idle_threshold_sec:
                         trip_num += 1
-                        accumulated_stop = 0.0
+                    # Reset stop accumulator whenever movement resumes so
+                    # separate short stops do not incorrectly accumulate.
+                    accumulated_stop = 0.0
                     prev_moving = True
                 else:
                     idle_sec += dt_sec
@@ -129,10 +131,10 @@ def aggregate_daily(rows, idle_threshold_minutes: float) -> Dict[Tuple[int, dt.d
             tot_dura_hours = round(drive_sec / 3600.0, 2)
             idle_hours = round(idle_sec / 3600.0, 2)
 
-        tot_soc_used = (
-            round(final_soc - init_soc, 4)
-            if init_soc is not None and final_soc is not None else None
-        )
+        tot_soc_used = None
+        if init_soc is not None and final_soc is not None:
+            # Daily "SOC used" should not be negative; clamp net gain days to 0.
+            tot_soc_used = round(max(init_soc - final_soc, 0.0), 4)
 
         aggregates[key] = {
             "veh_id": veh_pk,

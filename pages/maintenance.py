@@ -186,11 +186,11 @@ def compute_fleet_table(df_scope: pd.DataFrame) -> pd.DataFrame:
 
 
 def _fmt_int(val):
-    return "-" if pd.isna(val) else f"{int(round(float(val))):,}"
+    return "n/a" if pd.isna(val) else f"{int(round(float(val))):,}"
 
 
 def _fmt_money(val):
-    return "-" if pd.isna(val) else f"${int(round(float(val))):,}"
+    return "n/a" if pd.isna(val) else f"${int(round(float(val))):,}"
 
 
 def render_fleet_table(tbl: pd.DataFrame):
@@ -238,7 +238,7 @@ def render_fleet_table(tbl: pd.DataFrame):
                 )
             cells.extend(
                 [
-                    html.Td(row.get("Asset type", "-"), style=cell_style),
+                    html.Td(row.get("Asset type", "n/a"), style=cell_style),
                     html.Td(_fmt_int(row.get("Events")), style=cell_style),
                     html.Td(_fmt_money(row.get("Total cost")), style=cell_style),
                     html.Td(_fmt_money(row.get("Avg total cost")), style=cell_style),

@@ -5,8 +5,10 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")
 from data_update.common_data_update import engine
 
 # 1) Load Excel
-excel_path = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors\Charging event\EV Data Collection - Charging Event Data - 10-2025.xlsx"
-df = pd.read_excel(excel_path)
+FOLDER_PATH = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors\Charging event"
+FILE_PATH = r"\Wilsbach EV Data Collection - Charging Event Data - 12-2025.xlsx"
+XLSX_PATH = FOLDER_PATH + FILE_PATH
+df = pd.read_excel(XLSX_PATH)
 
 # 2) Basic normalization
 df["charger_id_str"] = df["Charger ID"].astype(str).str.split(":").str[0] + "-" + df["Port"].astype(str)

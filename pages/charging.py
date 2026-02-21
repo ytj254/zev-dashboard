@@ -127,6 +127,7 @@ def update_summary(_):
     summary.rename(columns=col_name_map, inplace=True)
     display_cols = [col_name_map.get(col, col) for col in summary.columns]
     summary.columns = display_cols
+    summary = summary.where(pd.notna(summary), "n/a")
     header = html.Thead(html.Tr([html.Th(col, style=header_style) for col in summary.columns]))
     body = html.Tbody([
         html.Tr([html.Td(row[col], style=cell_style) for col in summary.columns])

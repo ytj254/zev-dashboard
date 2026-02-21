@@ -280,7 +280,7 @@ def update_kpis_and_table(_, records):
     table_df = df_summary.copy()
     for col in table_df.columns:
         if col == "Fleet":
-            table_df[col] = table_df[col].fillna("-")
+            table_df[col] = table_df[col].fillna("n/a")
         else:
             table_df[col] = table_df[col].apply(fmt)
 

@@ -2,6 +2,7 @@ from dash import register_page, html, Output, Input, callback, ALL
 import dash_leaflet as dl
 import dash_bootstrap_components as dbc
 from dash import ctx
+import pandas as pd
 from db import get_fleet_data, get_veh_data, get_charger_data
 from utils import format_if_notna, battery_chem_map, charger_type_map, connector_type_map, map_multi_labels
 import json
@@ -60,6 +61,7 @@ fleet_summary_df = df_fleet[[
     "vendor_name": "Vendor",
     "depot_adr": "Depot Address",
 })
+fleet_summary_df = fleet_summary_df.where(pd.notna(fleet_summary_df), "n/a")
 
 layout = dbc.Row([
     # KPI Cards

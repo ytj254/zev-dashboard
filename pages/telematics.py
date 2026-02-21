@@ -281,13 +281,20 @@ def update_map_and_summary(fleet_name, vehicle_id, start_date, end_date):
     df["timestamp"] = pd.to_datetime(df["timestamp"])
     
     # Build summary table
+    def _na(v):
+        if v is None:
+            return "n/a"
+        if isinstance(v, float) and pd.isna(v):
+            return "n/a"
+        return v
+
     summary_data = [
         ["Fleet", fleet_name or "All Fleets"],
         ["Vehicle", vehicle_id or "All Vehicles"],
         ["Date Range", f"{start_date or 'Start'} to {end_date or 'End'}"],
         ["# Data Points", f"{len(df):,}"],
-        ["Avg Speed (mph)", f"{df['speed'].mean():.2f}"],
-        ["Max Speed (mph)", f"{df['speed'].max():.2f}"]
+        ["Avg Speed (mph)", _na(f"{df['speed'].mean():.2f}" if pd.notna(df['speed'].mean()) else None)],
+        ["Max Speed (mph)", _na(f"{df['speed'].max():.2f}" if pd.notna(df['speed'].max()) else None)],
     ]
     label_style = {"padding": "0.22rem 0.45rem", "fontSize": "0.82rem", "fontWeight": "600", "whiteSpace": "nowrap"}
     value_style = {"padding": "0.22rem 0.45rem", "fontSize": "0.82rem", "lineHeight": "1.15"}
