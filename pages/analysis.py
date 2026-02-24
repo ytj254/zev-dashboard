@@ -2,6 +2,7 @@ from dash import register_page, html, dcc, Input, Output, callback
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
+import time
 from db import engine
 from utils import charger_type_map
 from styles import DROPDOWN_STYLE, DARK_BG, GRID_COLOR, TEXT_COLOR, empty_fig
@@ -10,9 +11,16 @@ from styles import DROPDOWN_STYLE, DARK_BG, GRID_COLOR, TEXT_COLOR, empty_fig
 register_page(__name__, path="/analysis", name="Analysis")
 LOCAL_TZ = "America/New_York"
 WEEKDAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+CACHE_TTL_SECONDS = 300
+_ANALYSIS_CACHE = {"ts": 0.0, "df": None}
 
 
 def load_charging_analysis_data():
+    now = time.time()
+    cached_df = _ANALYSIS_CACHE["df"]
+    if cached_df is not None and now - _ANALYSIS_CACHE["ts"] < CACHE_TTL_SECONDS:
+        return cached_df.copy()
+
     query = """
         SELECT r.connect_time, r.disconnect_time, r.refuel_start, r.refuel_end, c.charger_type, f.fleet_name
         FROM refuel_inf r
@@ -28,7 +36,9 @@ def load_charging_analysis_data():
 
     date_series = df["charge_start_time"].fillna(df["charge_end_time"])
     df["date"] = pd.to_datetime(date_series, errors="coerce").dt.date
-    return df
+    _ANALYSIS_CACHE["df"] = df
+    _ANALYSIS_CACHE["ts"] = now
+    return df.copy()
 
 
 def _to_local_time(series: pd.Series) -> pd.Series:
@@ -62,6 +72,29 @@ def _weekday_hour_duration_matrix(df: pd.DataFrame):
             cursor = next_hour
 
     return minutes
+
+
+def _apply_filters(df, fleet_val, charger_val, start_date, end_date):
+    if fleet_val:
+        df = df[df["fleet_name"] == fleet_val]
+    if charger_val:
+        df = df[df["charger_type"] == charger_val]
+    if start_date:
+        df = df[df["date"] >= pd.to_datetime(start_date).date()]
+    if end_date:
+        df = df[df["date"] <= pd.to_datetime(end_date).date()]
+    return df
+
+
+def _default_last_30_days(df):
+    if df.empty:
+        return df
+    date_as_dt = pd.to_datetime(df["date"], errors="coerce")
+    latest = date_as_dt.max()
+    if pd.isna(latest):
+        return df
+    earliest = latest - pd.Timedelta(days=29)
+    return df[(date_as_dt >= earliest) & (date_as_dt <= latest)]
 
 
 layout = html.Div([
@@ -124,19 +157,9 @@ def update_analysis_heatmap(fleet_val, charger_val, start_date, end_date):
     df = load_charging_analysis_data()
 
     if not any([fleet_val, charger_val, start_date, end_date]) and not df.empty:
-        latest = pd.to_datetime(df["date"], errors="coerce").max()
-        if pd.notna(latest):
-            earliest = latest - pd.Timedelta(days=29)
-            df = df[(pd.to_datetime(df["date"]) >= earliest) & (pd.to_datetime(df["date"]) <= latest)]
+        df = _default_last_30_days(df)
 
-    if fleet_val:
-        df = df[df["fleet_name"] == fleet_val]
-    if charger_val:
-        df = df[df["charger_type"] == charger_val]
-    if start_date:
-        df = df[df["date"] >= pd.to_datetime(start_date).date()]
-    if end_date:
-        df = df[df["date"] <= pd.to_datetime(end_date).date()]
+    df = _apply_filters(df, fleet_val, charger_val, start_date, end_date)
 
     matrix = _weekday_hour_duration_matrix(df)
     if matrix is None or matrix.empty:

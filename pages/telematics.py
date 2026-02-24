@@ -120,6 +120,7 @@ layout = html.Div([
             html.Div(style={"height": "25px"}),
             
             html.H5("Filtered Summary", style={"color": TEXT_COLOR}),
+            html.P("Applies current filters and date range. Default view shows the latest 30 days.", style={"color": TEXT_COLOR, "marginBottom": "8px"}),
             html.Div(
                 id="summary-table-telematics",
                 style={

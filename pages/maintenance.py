@@ -1,5 +1,5 @@
 # maintenance.py
-from dash import register_page, html, dcc, Input, Output, State, callback, no_update
+from dash import register_page, html, dcc, Input, Output, callback
 import dash_bootstrap_components as dbc
 import pandas as pd
 import numpy as np
@@ -265,9 +265,9 @@ def render_fleet_table(tbl: pd.DataFrame):
     )
 
 
-def fleet_table_component():
-    initial_tbl = compute_fleet_table(_df)
-    return html.Div(id="maint-fleet-table", children=render_fleet_table(initial_tbl))
+def fleet_table_component(component_id, df_scope):
+    initial_tbl = compute_fleet_table(df_scope)
+    return html.Div(id=component_id, children=render_fleet_table(initial_tbl))
 
 
 # ---------- Block 3 (Pies + Filters) ----------
@@ -314,9 +314,9 @@ def layout():
         # html.H2("Maintenance"),
         html.Div(kpi_block_global(_df), className="mb-4"),
 
-        # Block 2: Fleet table
-        html.H4("Fleet Summary"),
-        fleet_table_component(),
+        # Block 2A: Fleet table (all data)
+        html.H4("Maintenance Summary by Fleet and Asset Type"),
+        fleet_table_component("maint-fleet-table-all", _df),
         html.Hr(),
 
         # Filters
@@ -374,6 +374,12 @@ def layout():
                 ], md=3),
             ], className="g-3"),
         ]), className="mb-4 shadow-sm rounded-2xl", style={"backgroundColor": DARK_BG}),
+
+        # Block 2B: Fleet table (filtered)
+        html.H4("Filtered Maintenance Summary"),
+        html.P("Applies current filters. Default view (no fleet/asset/date filter selected) shows the latest 30 days.", style={"color": TEXT_COLOR}),
+        fleet_table_component("maint-fleet-table-filtered", _latest_30_days_scope(_df)),
+        html.Hr(),
         
         # Block 3: Pies
         html.H4("Maintenance Composition"),
@@ -447,8 +453,20 @@ def apply_filters(df, fleets_sel, asset_type, asset_ids, start_date, end_date):
     return d
 
 
+def _latest_30_days_scope(df):
+    if df.empty:
+        return df
+    latest = pd.to_datetime(df["date"], errors="coerce").max()
+    if pd.isna(latest):
+        return df
+    earliest = latest - pd.Timedelta(days=29)
+    d = df.copy()
+    date_dt = pd.to_datetime(d["date"], errors="coerce")
+    return d[(date_dt >= earliest) & (date_dt <= latest)]
+
+
 @callback(
-    Output("maint-fleet-table", "children"),
+    Output("maint-fleet-table-filtered", "children"),
     Output("maint-pie-category", "figure"),
     Output("maint-pie-warranty", "figure"),
     Output("maint-pie-location", "figure"),
@@ -464,9 +482,16 @@ def update_block2_block3(fleets_sel, asset_type, asset_ids, start_date, end_date
         asset_ids = [asset_ids]
 
     d = apply_filters(_df, fleets_sel, asset_type, asset_ids, start_date, end_date)
+    d_table = d
+    if not any([fleets_sel, asset_ids, start_date, end_date]):
+        d_table = _latest_30_days_scope(d_table)
 
     # ---- Block 2: Fleet table ----
-    tbl = compute_fleet_table(_df)
+    tbl = compute_fleet_table(d_table)
+    if asset_type == "vehicle":
+        tbl = tbl[tbl["Asset type"] == "Vehicle"]
+    elif asset_type == "charger":
+        tbl = tbl[tbl["Asset type"] == "Charger"]
     fleet_table_ui = render_fleet_table(tbl)
 
     # ---- Block 3: Pies ----

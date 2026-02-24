@@ -2,10 +2,13 @@ from dash import register_page, html, dcc, Input, Output, callback, State
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
+import time
 from db import engine
 from styles import DROPDOWN_STYLE, DARK_BG, GRID_COLOR, TEXT_COLOR, empty_fig
 
 register_page(__name__, path="/veh_daily_usage", name="Vehicle Daily Usage")
+CACHE_TTL_SECONDS = 300
+_DAILY_USAGE_CACHE = {"ts": 0.0, "df": None}
 
 metric_options = [
     {'label': 'Total Distance (mi)', 'value': 'tot_dist'},
@@ -19,6 +22,11 @@ metric_options = [
 ]
 
 def load_daily_usage_data():
+    now = time.time()
+    cached_df = _DAILY_USAGE_CACHE["df"]
+    if cached_df is not None and now - _DAILY_USAGE_CACHE["ts"] < CACHE_TTL_SECONDS:
+        return cached_df.copy()
+
     query = """
         SELECT f.fleet_name AS fleet, v.make, v.model, v.class, v.fleet_vehicle_id, vd.*
         FROM veh_daily vd
@@ -27,7 +35,9 @@ def load_daily_usage_data():
     """
     df = pd.read_sql(query, engine)
     df["tot_soc_used"] = df["tot_soc_used"] * 100
-    return df
+    _DAILY_USAGE_CACHE["df"] = df
+    _DAILY_USAGE_CACHE["ts"] = now
+    return df.copy()
 
 layout = html.Div([
     dcc.Store(id="daily-usage-store", data=load_daily_usage_data().to_dict("records")),
@@ -57,6 +67,12 @@ layout = html.Div([
         dcc.Dropdown(id='metric-dropdown', options=metric_options, value='tot_dist',
                      placeholder='Select Metric', style=DROPDOWN_STYLE)
     ], style={'display': 'flex', 'flexWrap': 'wrap', 'gap': '10px', 'marginBottom': '20px'}),
+
+    html.Div([
+        html.H4("Filtered Daily Usage Summary", style={"color": TEXT_COLOR}),
+        html.P("Applies current filters. Default view (no filter selected) shows the latest 30 days.", style={"color": TEXT_COLOR}),
+        html.Div(id="fleet-summary-table-filtered")
+    ], style={"marginBottom": "2rem"}),
 
     html.Div([
         html.H5("Daily Metric by Date", style={"color": TEXT_COLOR}),
@@ -112,6 +128,19 @@ def _filter_daily(records, fleets, makes, models, classes, veh_ids, start_date, 
     return df
 
 
+def _default_latest_30_days(df):
+    if df.empty:
+        return df
+    d = df.copy()
+    d["date"] = pd.to_datetime(d["date"], errors="coerce").dt.date
+    latest = pd.to_datetime(d["date"], errors="coerce").max()
+    if pd.isna(latest):
+        return d
+    earliest = (latest - pd.Timedelta(days=29)).date()
+    latest_date = latest.date()
+    return d[(d["date"] >= earliest) & (d["date"] <= latest_date)]
+
+
 def _resolve_efficiency_rows(df):
     out = df.copy()
     dist = pd.to_numeric(out.get("tot_dist"), errors="coerce")
@@ -163,6 +192,70 @@ def _safe_eff(group):
         # Same aggregation rule as daily efficiency chart (distance-weighted).
         return (eff_rows["efficiency_resolved"] * eff_rows["tot_dist_num"]).sum(skipna=True) / dist_sum
     return None
+
+
+def _build_fleet_summary_table(df, header_style, cell_style):
+    if df.empty:
+        return pd.DataFrame(), dbc.Table(
+            [html.Tbody([html.Tr([html.Td("No data available", colSpan=8, style={**cell_style, "textAlign": "center"})])])],
+            bordered=True,
+            hover=True,
+            responsive=True,
+            className="table table-dark mb-0",
+            size="sm",
+        )
+
+    def safe_mean(series):
+        s = series.dropna()
+        return s.mean() if not s.empty else None
+
+    summary = []
+    for fleet_name, group in df.groupby("fleet"):
+        dist_positive = group[group["tot_dist"] > 0]["tot_dist"]
+        energy_positive = group[group["tot_energy"] > 0]["tot_energy"]
+        dura_positive = group[group["tot_dura"] > 0]["tot_dura"]
+        summary.append({
+            "Fleet": fleet_name,
+            "Total Distance (mi)": round(group["tot_dist"].sum(), 2),
+            "Daily Distance (mi)": safe_mean(dist_positive),
+            "Daily Energy (kWh)": safe_mean(energy_positive),
+            "Energy Efficiency (kWh/mi)": _safe_eff(group),
+            "Daily SOC Used (%)": safe_mean(group[group["tot_soc_used"] > 0]["tot_soc_used"]),
+            "Daily Driving Time (hr)": safe_mean(dura_positive),
+            "Daily Idle Time (hr)": safe_mean(group["idle_time"]),
+        })
+
+    df_summary = pd.DataFrame(summary)
+
+    def fmt(val, digits=2):
+        if val is None or (isinstance(val, float) and pd.isna(val)):
+            return "n/a"
+        try:
+            return f"{val:.{digits}f}"
+        except Exception:
+            return val
+
+    table_df = df_summary.copy()
+    for col in table_df.columns:
+        if col == "Fleet":
+            table_df[col] = table_df[col].fillna("n/a")
+        else:
+            table_df[col] = table_df[col].apply(fmt)
+
+    header = html.Thead(html.Tr([html.Th(col, style=header_style) for col in table_df.columns]))
+    body = html.Tbody([
+        html.Tr([html.Td(row[col], style=cell_style) for col in table_df.columns])
+        for _, row in table_df.iterrows()
+    ])
+    table_ui = dbc.Table(
+        [header, body],
+        bordered=True,
+        hover=True,
+        responsive=True,
+        className="table table-dark mb-0",
+        size="sm",
+    )
+    return df_summary, table_ui
 
 
 @callback(
@@ -229,74 +322,16 @@ def update_figures(fleets, makes, models, classes, veh_ids, start_date, end_date
     Output("kpi-daily-soc", "children"),
     Output("fleet-summary-table", "children"),
     Input("fleet-summary-table", "id"),
-    State("daily-usage-store", "data")   # <-- Add this line
+    State("daily-usage-store", "data")
 )
 
 def update_kpis_and_table(_, records):
     header_style = {"padding": "0.3rem 0.45rem", "fontSize": "0.82rem", "whiteSpace": "nowrap"}
     cell_style = {"padding": "0.22rem 0.45rem", "fontSize": "0.82rem", "lineHeight": "1.15"}
     df = pd.DataFrame(records)
-    if df.empty:
-        return "0", "0", "0", "0", "0", dbc.Table(
-            [html.Tbody([html.Tr([html.Td("No data available", colSpan=8, style={**cell_style, "textAlign": "center"})])])],
-            bordered=True,
-            hover=True,
-            responsive=True,
-            className="table table-dark mb-0",
-            size="sm",
-        )
-
-    def safe_mean(series):
-        s = series.dropna()
-        return s.mean() if not s.empty else None
-
-    summary = []
-    for fleet_name, group in df.groupby("fleet"):
-        dist_positive = group[group["tot_dist"] > 0]["tot_dist"]
-        energy_positive = group[group["tot_energy"] > 0]["tot_energy"]
-        dura_positive = group[group["tot_dura"] > 0]["tot_dura"]
-        summary.append({
-            "Fleet": fleet_name,
-            "Total Distance (mi)": round(group["tot_dist"].sum(), 2),
-            "Daily Distance (mi)": safe_mean(dist_positive),
-            "Daily Energy (kWh)": safe_mean(energy_positive),
-            "Energy Efficiency (kWh/mi)": _safe_eff(group),
-            "Daily SOC Used (%)": safe_mean(group[group["tot_soc_used"] > 0]["tot_soc_used"]),
-            "Daily Driving Time (hr)": safe_mean(dura_positive),
-            "Daily Idle Time (hr)": safe_mean(group["idle_time"]),
-        })
-
-    df_summary = pd.DataFrame(summary)
-
-    # Prepare table display with placeholders
-    def fmt(val, digits=2):
-        if val is None or (isinstance(val, float) and pd.isna(val)):
-            return "n/a"
-        try:
-            return f"{val:.{digits}f}"
-        except Exception:
-            return val
-
-    table_df = df_summary.copy()
-    for col in table_df.columns:
-        if col == "Fleet":
-            table_df[col] = table_df[col].fillna("n/a")
-        else:
-            table_df[col] = table_df[col].apply(fmt)
-
-    header = html.Thead(html.Tr([html.Th(col, style=header_style) for col in table_df.columns]))
-    body = html.Tbody([
-        html.Tr([html.Td(row[col], style=cell_style) for col in table_df.columns])
-        for _, row in table_df.iterrows()
-    ])
-    table_ui = dbc.Table(
-        [header, body],
-        bordered=True,
-        hover=True,
-        responsive=True,
-        className="table table-dark mb-0",
-        size="sm",
-    )
+    df_summary, table_ui = _build_fleet_summary_table(df, header_style, cell_style)
+    if df_summary.empty:
+        return "0", "0", "0", "0", "0", table_ui
 
     df_summary_kpi = df_summary.fillna(0)
     return (
@@ -307,3 +342,24 @@ def update_kpis_and_table(_, records):
         f"{df_summary_kpi['Daily SOC Used (%)'].mean():.2f}",
         table_ui,
     )
+
+
+@callback(
+    Output("fleet-summary-table-filtered", "children"),
+    Input('fleet-dropdown', 'value'),
+    Input('make-dropdown', 'value'),
+    Input('model-dropdown', 'value'),
+    Input('vehicle-class-dropdown', 'value'),
+    Input('fleet-veh-id-dropdown', 'value'),
+    Input('date-range-picker', 'start_date'),
+    Input('date-range-picker', 'end_date'),
+    State("daily-usage-store", "data")
+)
+def update_filtered_summary_table(fleets, makes, models, classes, veh_ids, start_date, end_date, records):
+    header_style = {"padding": "0.3rem 0.45rem", "fontSize": "0.82rem", "whiteSpace": "nowrap"}
+    cell_style = {"padding": "0.22rem 0.45rem", "fontSize": "0.82rem", "lineHeight": "1.15"}
+    d = _filter_daily(records, fleets, makes, models, classes, veh_ids, start_date, end_date)
+    if not any([fleets, makes, models, classes, veh_ids, start_date, end_date]):
+        d = _default_latest_30_days(d)
+    _, table_ui = _build_fleet_summary_table(d, header_style, cell_style)
+    return table_ui

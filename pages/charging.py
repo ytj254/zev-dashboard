@@ -2,6 +2,7 @@ from dash import register_page, html, dcc, Input, Output, callback
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
+import time
 from db import engine
 from utils import charger_type_map
 from styles import DROPDOWN_STYLE, DARK_BG, GRID_COLOR, TEXT_COLOR, empty_fig
@@ -10,9 +11,16 @@ from styles import DROPDOWN_STYLE, DARK_BG, GRID_COLOR, TEXT_COLOR, empty_fig
 register_page(__name__, path="/charging", name="Charging")
 LOCAL_TZ = "America/New_York"
 TIMESTAMP_COLS = ["connect_time", "disconnect_time", "refuel_start", "refuel_end"]
+CACHE_TTL_SECONDS = 300
+_CHARGING_CACHE = {"ts": 0.0, "df": None}
 
 
 def load_charging_data():
+    now = time.time()
+    cached_df = _CHARGING_CACHE["df"]
+    if cached_df is not None and now - _CHARGING_CACHE["ts"] < CACHE_TTL_SECONDS:
+        return cached_df.copy()
+
     query = """
         SELECT r.*, c.charger_type, f.fleet_name
         FROM refuel_inf r
@@ -41,7 +49,10 @@ def load_charging_data():
     # Robust event date: charge_start_time fallback to charge_end_time.
     date_series = df["charge_start_time"].copy().fillna(df["charge_end_time"])
     df["date"] = date_series.dt.date
-    return df
+
+    _CHARGING_CACHE["df"] = df
+    _CHARGING_CACHE["ts"] = now
+    return df.copy()
 
 
 def _daily_mean(df, col):
@@ -154,7 +165,7 @@ layout = html.Div([
         ])), width=4),
     ], className="mb-4"),
 
-    html.H4("Charging Events Summary by Fleet and Charger Type"),
+    html.H4("Charging Events Summary by Fleet"),
     html.Div(id="summary-table-charging"),
 
     html.Div([
@@ -162,6 +173,9 @@ layout = html.Div([
         dcc.Dropdown(id="charger-filter", placeholder="Select Charger Type", style=DROPDOWN_STYLE),
         dcc.DatePickerRange(id="date-range-picker"),
     ], style={"display": "flex", "flexWrap": "wrap", "gap": "10px", "margin": "30px 0 20px 0"}),
+    html.H4("Filtered Charging Summary"),
+    html.P("Applies current filters. Default view (no filter selected) shows the latest 30 days.", style={"color": TEXT_COLOR}),
+    html.Div(id="summary-table-charging-filtered", className="mb-3"),
 
     dbc.Row([
         dbc.Col(dcc.Graph(id="fig-power"), width=6),
@@ -212,6 +226,13 @@ def update_summary(_):
         "Avg_SOC_Gain": "Avg SOC Gain (%)",
     }
 
+    table_ui = _render_charging_summary_table(summary, col_name_map, header_style, cell_style)
+
+    return kpi1, kpi2, kpi3, kpi4, table_ui
+
+
+def _render_charging_summary_table(summary, col_name_map, header_style, cell_style):
+    summary = summary.copy()
     summary.rename(columns=col_name_map, inplace=True)
     summary.columns = [col_name_map.get(col, col) for col in summary.columns]
     summary = summary.where(pd.notna(summary), "n/a")
@@ -222,7 +243,7 @@ def update_summary(_):
         for _, row in summary.iterrows()
     ])
 
-    table_ui = dbc.Table(
+    return dbc.Table(
         [header, body],
         bordered=True,
         hover=True,
@@ -230,8 +251,6 @@ def update_summary(_):
         className="table table-dark mb-0",
         size="sm",
     )
-
-    return kpi1, kpi2, kpi3, kpi4, table_ui
 
 
 @callback(
@@ -252,6 +271,54 @@ def populate_charger_options(_):
     df = load_charging_data()
     types = sorted(df["charger_type"].dropna().unique())
     return [{"label": t, "value": t} for t in types]
+
+
+@callback(
+    Output("summary-table-charging-filtered", "children"),
+    Input("fleet-filter", "value"),
+    Input("charger-filter", "value"),
+    Input("date-range-picker", "start_date"),
+    Input("date-range-picker", "end_date"),
+)
+def update_filtered_summary(fleet_val, charger_val, start_date, end_date):
+    header_style = {"padding": "0.3rem 0.45rem", "fontSize": "0.82rem", "whiteSpace": "nowrap"}
+    cell_style = {"padding": "0.22rem 0.45rem", "fontSize": "0.82rem", "lineHeight": "1.15"}
+    col_name_map = {
+        "fleet_name": "Fleet Name",
+        "charger_type": "Charger Type",
+        "Events": "# of Events",
+        "Energy_kWh": "Total Energy (kWh)",
+        "Avg_Charging_Min": "Avg Charging (min)",
+        "Avg_Connecting_Min": "Avg Connecting (min)",
+        "Avg_Power_kW": "Avg Power Output (kW)",
+        "Avg_SOC_Gain": "Avg SOC Gain (%)",
+    }
+
+    df = load_charging_data()
+    if not any([fleet_val, charger_val, start_date, end_date]) and not df.empty:
+        df = _default_last_30_days(df)
+    df = _apply_filters(df, fleet_val, charger_val, start_date, end_date)
+
+    summary = df.groupby(["fleet_name", "charger_type"]).agg(
+        Events=("id", "count"),
+        Energy_kWh=("tot_energy", "sum"),
+        Avg_Charging_Min=("charging_duration", "mean"),
+        Avg_Connecting_Min=("connecting_duration", "mean"),
+        Avg_Power_kW=("avg_power", "mean"),
+        Avg_SOC_Gain=("soc_gain", "mean"),
+    ).reset_index().round(2)
+
+    if summary.empty:
+        return dbc.Table(
+            [html.Tbody([html.Tr([html.Td("No data for selected filters", colSpan=8, style=cell_style)])])],
+            bordered=True,
+            hover=True,
+            responsive=True,
+            className="table table-dark mb-0",
+            size="sm",
+        )
+
+    return _render_charging_summary_table(summary, col_name_map, header_style, cell_style)
 
 
 @callback(
