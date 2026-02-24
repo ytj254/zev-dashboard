@@ -12,7 +12,7 @@ from data_update.common_data_update import get_conn  # noqa: E402
 FOLDER_PATH = Path(
     r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors\Daily usage"
 )
-FILE_NAME = r"Wilsbach EV Data Collection – Vehicle Daily Usage Summary 12-2025.xlsx"
+FILE_NAME = r"Wilsbach EV Data Collection – Vehicle Daily Usage Summary 01-2026.xlsx"
 
 
 def _normalize_cols(df: pd.DataFrame) -> pd.DataFrame:

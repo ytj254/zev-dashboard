@@ -9,7 +9,7 @@ from data_update.common_data_update import engine   # SQLAlchemy engine
 
 # ==================== Config ====================
 FOLDER_PATH = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors\Telematics"
-FILE_PATH = r"\Wilsbach EV Data Collection - Telematics Data - 12-2025.xlsx"
+FILE_PATH = r"\Wilsbach EV Data Collection - Telematics Data - 01-2026.xlsx"
 XLSX_PATH = FOLDER_PATH + FILE_PATH
 
 DOUBLE_EPSILON = 0.05  # 5% tolerance for doubled-value artifact checks
