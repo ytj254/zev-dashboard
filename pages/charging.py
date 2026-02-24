@@ -8,6 +8,7 @@ from styles import DROPDOWN_STYLE, DARK_BG, GRID_COLOR, TEXT_COLOR, empty_fig
 
 
 register_page(__name__, path="/charging", name="Charging")
+LOCAL_TZ = "America/New_York"
 
 def load_charging_data():
     query = """
@@ -25,8 +26,10 @@ def load_charging_data():
     # --- Charging duration: prefer tot_ref_dura, fallback to refuel_start/end
     duration_from_times = (df["refuel_end"] - df["refuel_start"]).dt.total_seconds() / 60
     df["charging_duration"] = df["tot_ref_dura"].fillna(duration_from_times)
-    
+
     df["connecting_duration"] = (df["disconnect_time"] - df["connect_time"]).dt.total_seconds() / 60
+    df["charge_start_time"] = df["refuel_start"].fillna(df["connect_time"])
+    df["charge_end_time"] = df["refuel_end"].fillna(df["disconnect_time"])
     
     df["charger_type"] = df["charger_type"].map(charger_type_map).fillna(df["charger_type"])
     # --- Robust event date: connect_time → refuel_end → refuel_start ---
@@ -44,6 +47,47 @@ def _daily_mean(df, col):
     if d.empty:
         return None
     return d.groupby("date", as_index=False)[col].mean()
+
+def _hourly_start_end_distribution(df):
+    if df.empty:
+        return None
+
+    s = pd.to_datetime(df["charge_start_time"], errors="coerce").dropna()
+    e = pd.to_datetime(df["charge_end_time"], errors="coerce").dropna()
+    if s.empty and e.empty:
+        return None
+
+    # Stored timestamps are UTC-naive; convert to local time for 24h distribution.
+    if getattr(s.dt, "tz", None) is None:
+        s = s.dt.tz_localize("UTC").dt.tz_convert(LOCAL_TZ)
+    else:
+        s = s.dt.tz_convert(LOCAL_TZ)
+
+    if getattr(e.dt, "tz", None) is None:
+        e = e.dt.tz_localize("UTC").dt.tz_convert(LOCAL_TZ)
+    else:
+        e = e.dt.tz_convert(LOCAL_TZ)
+
+    out = []
+    if not s.empty:
+        out.append(
+            pd.DataFrame(
+                {
+                    "hour": s.dt.hour,
+                    "event": "Start",
+                }
+            )
+        )
+    if not e.empty:
+        out.append(
+            pd.DataFrame(
+                {
+                    "hour": e.dt.hour,
+                    "event": "End",
+                }
+            )
+        )
+    return pd.concat(out, ignore_index=True) if out else None
 
 # === Layout ===
 
@@ -205,12 +249,39 @@ def update_figures(fleet_val, charger_val, start_date, end_date):
         f.update_layout(yaxis_title="Power (kW)")
         figs.append(f)
 
-    daily_soc = _daily_mean(df, "soc_gain")
-    if daily_soc is None or daily_soc.empty:
+    hourly_dist = _hourly_start_end_distribution(df)
+    if hourly_dist is None or hourly_dist.empty:
         figs.append(empty_fig("No data available"))
     else:
-        f = px.bar(daily_soc, x="date", y="soc_gain", title="Average SOC Gain (%)")
-        f.update_layout(yaxis_title="SOC (%)")
+        hourly_counts = (
+            hourly_dist
+            .groupby(["event", "hour"], as_index=False)
+            .size()
+            .rename(columns={"size": "count"})
+        )
+
+        scaffold = pd.MultiIndex.from_product(
+            [["Start", "End"], range(24)],
+            names=["event", "hour"]
+        ).to_frame(index=False)
+        hourly_counts = scaffold.merge(hourly_counts, on=["event", "hour"], how="left")
+        hourly_counts["count"] = hourly_counts["count"].fillna(0).astype(int)
+
+        f = px.bar(
+            hourly_counts,
+            x="hour",
+            y="count",
+            color="event",
+            barmode="group",
+            category_orders={"event": ["Start", "End"]},
+            title="Charging Event Time Distribution (24h, Local Time)",
+        )
+        f.update_layout(
+            xaxis_title="Hour of Day",
+            yaxis_title="Event Count",
+            legend_title="Event",
+        )
+        f.update_xaxes(tickmode="array", tickvals=list(range(24)))
         figs.append(f)
 
     daily_chg = _daily_mean(df, "charging_duration")

@@ -4,6 +4,13 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data_update.common_data_update import engine
 
+LOCAL_TZ = "America/New_York"
+
+def to_utc_naive(series: pd.Series) -> pd.Series:
+    dt = pd.to_datetime(series, errors="coerce")
+    dt = dt.dt.tz_localize(LOCAL_TZ, ambiguous="NaT", nonexistent="NaT")
+    return dt.dt.tz_convert("UTC").dt.tz_localize(None)
+
 # 1) Load Excel
 FOLDER_PATH = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors\Charging event"
 FILE_PATH = r"\Wilsbach EV Data Collection - Charging Event Data - 12-2025.xlsx"
@@ -27,9 +34,9 @@ df = df.rename(columns={
 })
 
 # print(df)
-# 3) Parse datetimes BEFORE any .dt usage
+# 3) Parse datetimes and normalize local time -> UTC (naive) BEFORE any .dt usage
 for col in ["connect_time", "disconnect_time", "refuel_start", "refuel_end"]:
-    df[col] = pd.to_datetime(df[col], errors="coerce")
+    df[col] = to_utc_naive(df[col])
 
 # 4) Duration checks and validity filter
 dur_min = (df["refuel_end"] - df["refuel_start"]).dt.total_seconds().div(60)

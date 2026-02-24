@@ -5,6 +5,10 @@ from datetime import time as dt_time
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data_update.common_data_update import engine
 
+def parse_utc_to_naive(series: pd.Series) -> pd.Series:
+    dt = pd.to_datetime(series, errors="coerce", utc=True)
+    return dt.dt.tz_localize(None)
+
 # --- Config ---
 FOLDER_PATH = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Watsontown Trucking"
 FILE_PATH = r"\2025 - Qtr 4\Charging & Telematics\WATW DEP EV Grant - Wattson - Q4 2025.xlsx"
@@ -37,9 +41,9 @@ tractor_id = df.get("Tractor ID", pd.Series([None] * len(df))).apply(_normalize_
 tractor_num = df.get("Tractor Number", pd.Series([None] * len(df))).apply(_normalize_vehicle_key)
 df["veh_key"] = tractor_id.where(tractor_id.notna(), tractor_num)
 
-# Parse times
-df["refuel_start"] = pd.to_datetime(df["Session Start Time"], errors="coerce", dayfirst=False)
-df["refuel_end"]   = pd.to_datetime(df["Session Stop Time"],  errors="coerce", dayfirst=False)
+# Parse times as UTC and store as UTC-naive timestamps for DB consistency.
+df["refuel_start"] = parse_utc_to_naive(df["Session Start Time"])
+df["refuel_end"]   = parse_utc_to_naive(df["Session Stop Time"])
 
 
 # Numeric conversions
