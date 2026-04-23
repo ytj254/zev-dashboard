@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 from pathlib import Path
 
@@ -7,12 +7,11 @@ import psycopg2.extras as extras
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data_update.common_data_update import get_conn  # noqa: E402
+from data_update.paths import INCOMING_DATA_DIR  # noqa: E402
 
 
-FOLDER_PATH = Path(
-    r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors\Daily usage"
-)
-FILE_NAME = r"Wilsbach EV Data Collection – Vehicle Daily Usage Summary 01-2026.xlsx"
+FOLDER_PATH = INCOMING_DATA_DIR / "Wilsbach Distributors" / "Daily usage"
+FILE_NAME = r"Wilsbach EV Data Collection â€“ Vehicle Daily Usage Summary 01-2026.xlsx"
 
 
 def _normalize_cols(df: pd.DataFrame) -> pd.DataFrame:
@@ -228,3 +227,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

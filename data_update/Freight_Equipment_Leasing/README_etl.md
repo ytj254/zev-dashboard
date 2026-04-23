@@ -6,11 +6,11 @@
 
 ### Config
 - `.env` loaded from:
-  `D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\zev-dashboard\aws\.env`
+  `<project root>\aws\.env`
   and must contain `DATABASE_URL=postgresql://...`
 
 - Data root:
-  `D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Freight Equipment Leasing\aws_download`
+  `<project parent>\Incoming fleet data\Freight Equipment Leasing\aws_download`
 
 ### One-time DB setup
 ```bash

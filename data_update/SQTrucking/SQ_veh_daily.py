@@ -1,13 +1,14 @@
-
+﻿
 import pandas as pd
 import re
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data_update.common_data_update import engine
+from data_update.paths import INCOMING_DATA_DIR
 
 
 # Replace this with the actual Excel file path
-excel_path = "D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\SQ Trucking\SQ Trucking EVs Data for February 2025.xls"
+excel_path = INCOMING_DATA_DIR / "SQ Trucking" / "SQ Trucking EVs Data for February 2025.xls"
 
 # Load data
 df = pd.read_excel(excel_path, engine="xlrd")

@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 import pandas as pd
 import psycopg2.extras as extras
 import sys, os
@@ -6,6 +6,7 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from data_update.common_data_update import get_conn
+from data_update.paths import INCOMING_DATA_DIR
 from data_update.Freight_Equipment_Leasing.common import (
     FLEET_NAME,
     get_fleet_id_and_vehicle_maps,
@@ -14,9 +15,7 @@ from data_update.Freight_Equipment_Leasing.common import (
 )
 
 # --- Config ---
-EXCEL_FILE = Path(
-    r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Freight Equipment Leasing\Charging log\PITT OHIO Charging Sessions List 2_2_2026.xlsx"
-)
+EXCEL_FILE = INCOMING_DATA_DIR / "Freight Equipment Leasing" / "Charging log" / "PITT OHIO Charging Sessions List 2_2_2026.xlsx"
 SESSIONS_SHEET = "Sessions list"
 LOCAL_TZ = "America/New_York"
 
@@ -191,3 +190,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

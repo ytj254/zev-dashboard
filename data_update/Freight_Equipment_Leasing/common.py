@@ -1,4 +1,4 @@
-import os, hashlib, shutil, re
+﻿import os, hashlib, shutil, re
 from datetime import datetime
 from pathlib import Path
 import json
@@ -7,14 +7,14 @@ import pandas as pd
 from dotenv import load_dotenv
 import psycopg2
 import psycopg2.extras as _extras
+from data_update.paths import INCOMING_DATA_DIR
 
 # ---- CONFIG ----
 FREIGHT_VEH_IDS = {"DSE175","DSE176","DSE177","SSE26116","SE28500","SE28501"}
 FLEET_NAME = "Freight Equipment Leasing"
-ROOT_DIR = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Freight Equipment Leasing\aws_download"
+ROOT_DIR = INCOMING_DATA_DIR / "Freight Equipment Leasing" / "aws_download"
 ARCHIVE_SUB = "_archive"
 LOG_FILE = Path(__file__).parent / "_ingestion_log.json"
-
 DATEFOLDER_RE = re.compile(r"^\d{8}$")  # YYYYMMDD
 
 def md5_file(p: Path) -> str:
@@ -24,11 +24,23 @@ def md5_file(p: Path) -> str:
             h.update(chunk)
     return h.hexdigest()
 
+def _log_key(file_path: Path) -> str:
+    p = Path(file_path)
+    for root in (Path(ROOT_DIR),):
+        try:
+            return p.resolve().relative_to(root.resolve()).as_posix()
+        except ValueError:
+            continue
+    return str(p)
+
+def _normalize_log_data(data: dict) -> dict:
+    return {_log_key(Path(k)): v for k, v in data.items()}
+
 def _load_local_log():
     if LOG_FILE.exists():
         try:
             with open(LOG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                return _normalize_log_data(json.load(f))
         except Exception:
             return {}
     return {}
@@ -42,14 +54,14 @@ def already_ingested(conn, file_path: Path, file_hash: str) -> bool:
     Check if a file with this hash has already been ingested.
     """
     log_data = _load_local_log()
-    return log_data.get(str(file_path)) == file_hash
+    return log_data.get(_log_key(file_path)) == file_hash
 
 def record_ingestion(conn, file_path: Path, file_hash: str, rows_loaded: int):
     """
     Record the file's ingestion into the local log.
     """
     log_data = _load_local_log()
-    log_data[str(file_path)] = file_hash
+    log_data[_log_key(file_path)] = file_hash
     _save_local_log(log_data)
 
 def get_fleet_id_and_vehicle_maps(conn):
@@ -146,3 +158,6 @@ def round_int(x):
         return int(round(float(x)))
     except Exception:
         return None
+
+
+

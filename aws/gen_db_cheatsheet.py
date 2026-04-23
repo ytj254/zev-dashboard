@@ -1,10 +1,11 @@
-import os, sys, datetime, textwrap
+﻿import os, sys, datetime, textwrap
 from collections import defaultdict
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, inspect, text
+from data_update.paths import AWS_ENV_FILE, PROJECT_ROOT
 
 # 1) Connect
-load_dotenv(dotenv_path=r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\zev-dashboard\aws\.env")
+load_dotenv(dotenv_path=AWS_ENV_FILE)
 DB_URL = os.getenv("DATABASE_URL")
 if not DB_URL:
     print("Set DATABASE_URL in .env (e.g., postgresql://user:pass@host:5432/zevperf)")
@@ -15,7 +16,7 @@ ins = inspect(engine)
 # 2) Helpers
 PUBLIC = "public"
 now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-out_path = r"data_update\db_cheatsheet.md"
+out_path = PROJECT_ROOT / "data_update" / "db_cheatsheet.md"
 
 def pg_version(conn):
     return conn.execute(text("select version(), current_database()")).fetchone()
@@ -84,7 +85,7 @@ def format_fks(fks):
     for fk in fks:
         cc = ", ".join(fk["constrained_columns"])
         rc = ", ".join(fk["referred_columns"])
-        lines.append(f"- FK ({cc}) → {fk['referred_table']}({rc})")
+        lines.append(f"- FK ({cc}) â†’ {fk['referred_table']}({rc})")
     return "\n".join(lines)
 
 # 3) Build ER map (for quick join hints)
@@ -97,7 +98,7 @@ for t in get_tables():
 with engine.begin() as conn:
     ver, dbname = pg_version(conn)
 md = []
-md.append(f"# Database Cheat Sheet — `{dbname}`")
+md.append(f"# Database Cheat Sheet â€” `{dbname}`")
 md.append(f"_Generated: {now}_  \n_Engine: {ver.split(' on ')[0]}_")
 md.append("\n---\n")
 md.append("## Tables (public)\n")
@@ -120,7 +121,7 @@ for t in get_tables():
 md.append("---\n## Quick Join Hints\n")
 for t, lst in edges.items():
     for cols, rt, rcols in lst:
-        md.append(f"- `{t}`.{', '.join(cols)} → `{rt}`.{', '.join(rcols)}")
+        md.append(f"- `{t}`.{', '.join(cols)} â†’ `{rt}`.{', '.join(rcols)}")
 
 # Common copy-paste snippets for you
 md.append(r"""

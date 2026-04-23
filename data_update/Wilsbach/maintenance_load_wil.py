@@ -1,15 +1,16 @@
-import os, sys
+﻿import os, sys
 import pandas as pd
 import numpy as np
 import psycopg2.extras as extras
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data_update.utils import to_boolean
 from data_update.common_data_update import engine   # SQLAlchemy engine
+from data_update.paths import INCOMING_DATA_DIR
 
 # ==================== Config ====================
-FOLDER_PATH = "D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors\maintenance"
-FILE_PATH = "\Wilsbach EV Data Collection - Vehicle Maintenance - Mar-2025 - Current - 0126.xlsx"
-XLSX_PATH = FOLDER_PATH + FILE_PATH
+FOLDER_PATH = INCOMING_DATA_DIR / "Wilsbach Distributors" / "maintenance"
+FILE_PATH = "Wilsbach EV Data Collection - Vehicle Maintenance - Mar-2025 - Current - 0126.xlsx"
+XLSX_PATH = FOLDER_PATH / FILE_PATH
 
 # ==================== Load ====================
 df = pd.read_excel(XLSX_PATH)
@@ -173,3 +174,5 @@ print(f"Updated (nulls filled):       {updated}")
 print(f"Inserted (new):               {inserted}")
 print(f"Skipped (already existed):    {skipped_existing}")
 print(f"[INFO] Upserted Wilsbach maintenance rows (inserted={inserted}, updated={updated}).")
+
+

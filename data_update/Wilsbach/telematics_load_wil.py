@@ -1,4 +1,4 @@
-import os, sys
+﻿import os, sys
 import pandas as pd
 import numpy as np
 import psycopg2.extras as extras
@@ -6,11 +6,12 @@ from pytz.exceptions import AmbiguousTimeError
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data_update.common_data_update import engine   # SQLAlchemy engine
+from data_update.paths import INCOMING_DATA_DIR
 
 # ==================== Config ====================
-FOLDER_PATH = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors\Telematics"
-FILE_PATH = r"\Wilsbach EV Data Collection - Telematics Data - 01-2026.xlsx"
-XLSX_PATH = FOLDER_PATH + FILE_PATH
+FOLDER_PATH = INCOMING_DATA_DIR / "Wilsbach Distributors" / "Telematics"
+FILE_PATH = "Wilsbach EV Data Collection - Telematics Data - 01-2026.xlsx"
+XLSX_PATH = FOLDER_PATH / FILE_PATH
 
 DOUBLE_EPSILON = 0.05  # 5% tolerance for doubled-value artifact checks
 
@@ -227,3 +228,5 @@ print(f"Total dropped/removed:        {total_dropped}")
 print(f"Rows attempted to insert:     {attempted}")
 print(f"Inserted (new):               {inserted}")
 print(f"Skipped (already existed):    {skipped_existing}")
+
+

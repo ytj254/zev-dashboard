@@ -1,14 +1,16 @@
-import pandas as pd
+﻿import pandas as pd
 import numpy as np
 import psycopg2.extras as extras
 import sys, os
+from pathlib import Path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data_update.common_data_update import engine
+from data_update.paths import INCOMING_DATA_DIR
 
 # --- Config ---
-FOLDER_PATH = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Watsontown Trucking"
-FILE_PATH = r"\2025 - Qtr 4\Charging & Telematics\EVJ2 Q4 2025 fuel path.csv"
-CSV_PATH = FOLDER_PATH + FILE_PATH
+FOLDER_PATH = INCOMING_DATA_DIR / "Watsontown Trucking"
+FILE_PATH = Path("2025 - Qtr 4") / "Charging & Telematics" / "EVJ2 Q4 2025 fuel path.csv"
+CSV_PATH = FOLDER_PATH / FILE_PATH
 GPS_MAX_CONSEC_JUMP_MILES = 5.0
 # print(CSV_PATH)
 
@@ -332,3 +334,6 @@ print(f"Unchanged overlap rows:     {unchanged_overlap}")
 print(f"Rows inserted/updated:      {upserted}")
 print(f"Rows unchanged in DB:       {unchanged_existing}")
 print(f"Total dropped/removed:      {total_dropped}")
+
+
+

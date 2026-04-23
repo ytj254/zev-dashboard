@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 import pandas as pd
 import psycopg2.extras as _extras
 import sys, os
@@ -6,12 +6,11 @@ import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from data_update.common_data_update import get_conn
+from data_update.paths import INCOMING_DATA_DIR
 from common import FREIGHT_VEH_IDS, get_fleet_id_and_vehicle_maps
 
 
-EXCEL_FILE = Path(
-    r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Freight Equipment Leasing\Daily payload\data collect HBG Daily Summary.xlsx"
-)
+EXCEL_FILE = INCOMING_DATA_DIR / "Freight Equipment Leasing" / "Daily payload" / "data collect HBG Daily Summary.xlsx"
 
 COL_VEH = "(1) Vehicle ID (unique vehicle identifier)"
 COL_DATE = "(2) Date (yyyy-mm-dd)"
@@ -121,3 +120,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+

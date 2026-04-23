@@ -1,18 +1,20 @@
-import pandas as pd
+﻿import pandas as pd
 import psycopg2.extras as extras
 import sys, os
 from datetime import time as dt_time
+from pathlib import Path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data_update.common_data_update import engine
+from data_update.paths import INCOMING_DATA_DIR
 
 def parse_utc_to_naive(series: pd.Series) -> pd.Series:
     dt = pd.to_datetime(series, errors="coerce", utc=True)
     return dt.dt.tz_localize(None)
 
 # --- Config ---
-FOLDER_PATH = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Watsontown Trucking"
-FILE_PATH = r"\2025 - Qtr 4\Charging & Telematics\WATW DEP EV Grant - Wattson - Q4 2025.xlsx"
-CSV_PATH = FOLDER_PATH + FILE_PATH
+FOLDER_PATH = INCOMING_DATA_DIR / "Watsontown Trucking"
+FILE_PATH = Path("2025 - Qtr 4") / "Charging & Telematics" / "WATW DEP EV Grant - Wattson - Q4 2025.xlsx"
+CSV_PATH = FOLDER_PATH / FILE_PATH
 
 # ---------- LOAD FILE ----------
 _ext = os.path.splitext(CSV_PATH)[1].lower()
@@ -110,7 +112,7 @@ df_db = df[[
     "tot_energy", "start_soc", "end_soc", "tot_ref_dura"
 ]].copy()
 
-# Replace NaT / NaN → None
+# Replace NaT / NaN â†’ None
 df_db = df_db.replace({pd.NaT: None})
 df_db = df_db.where(pd.notna(df_db), None)
 
@@ -143,3 +145,6 @@ finally:
     conn.close()
 
 print(f"[INFO] Upserted {len(rows)} Wattson charging sessions into refuel_inf.")
+
+
+

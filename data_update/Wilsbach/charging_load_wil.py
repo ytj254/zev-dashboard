@@ -1,8 +1,9 @@
-import pandas as pd
+﻿import pandas as pd
 import psycopg2.extras as extras
 import sys, os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data_update.common_data_update import engine
+from data_update.paths import INCOMING_DATA_DIR
 
 LOCAL_TZ = "America/New_York"
 
@@ -12,9 +13,9 @@ def to_utc_naive(series: pd.Series) -> pd.Series:
     return dt.dt.tz_convert("UTC").dt.tz_localize(None)
 
 # 1) Load Excel
-FOLDER_PATH = r"D:\Project\Ongoing\DEP MHD-ZEV Performance Monitoring\Incoming fleet data\Wilsbach Distributors\Charging event"
-FILE_PATH = r"\Wilsbach EV Data Collection - Charging Event Data - 01-2026.xlsx"
-XLSX_PATH = FOLDER_PATH + FILE_PATH
+FOLDER_PATH = INCOMING_DATA_DIR / "Wilsbach Distributors" / "Charging event"
+FILE_PATH = "Wilsbach EV Data Collection - Charging Event Data - 01-2026.xlsx"
+XLSX_PATH = FOLDER_PATH / FILE_PATH
 df = pd.read_excel(XLSX_PATH)
 
 # 2) Basic normalization
@@ -54,7 +55,7 @@ dropped = (~valid).sum()
 print(f"[INFO] Dropping {dropped} rows (zero/invalid duration or energy)")
 df = df[valid].copy()
 
-# 5) Normalize SoC (to fraction 0–1)
+# 5) Normalize SoC (to fraction 0â€“1)
 for col in ["start_soc", "end_soc"]:
     df[col] = (
         df[col].astype(str).str.replace("%", "", regex=False).str.strip()
@@ -143,3 +144,5 @@ finally:
     conn.close()
 
 print(f"[INFO] Upserted {len(rows)} Wilsbach charging events.")
+
+
