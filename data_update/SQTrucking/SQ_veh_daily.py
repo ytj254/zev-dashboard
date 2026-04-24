@@ -8,41 +8,22 @@ import psycopg2.extras as extras
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data_update.common_data_update import get_conn  # noqa: E402
 from data_update.paths import INCOMING_DATA_DIR  # noqa: E402
+from data_update.SQTrucking.sq_common import (  # noqa: E402
+    VIN_TO_FLEET_VEHICLE_ID,
+    ensure_sq_vehicles,
+    load_sq_vehicle_map,
+    normalize_cols,
+    nullable_float,
+    nullable_int,
+)
 
 
-FLEET_NAME = "SQ Trucking"
 FILE_PATH = (
     INCOMING_DATA_DIR
     / "SQ Trucking"
     / "daily usage"
     / "Vehicle daily usage summary_20260304_090907.xlsx"
 )
-
-VIN_TO_FLEET_VEHICLE_ID = {
-    "4T9BACAA8RB208684": "530043",
-    "4T9BACAAXRB208685": "530160",
-    "4T9BACAA0RB208761": "532213",
-    "4T9BACAA2RB208762": "532234",
-    "2G5ZJ3TZ8S9102582": "Chevrolet600",
-}
-
-NEW_VEHICLE = {
-    "fleet_vehicle_id": "Chevrolet600",
-    "make": "Chevrolet",
-    "model": "Chevrolet BrightDrop Zevo 600",
-    "year": 2025,
-}
-
-
-def _normalize_cols(df: pd.DataFrame) -> pd.DataFrame:
-    out = df.copy()
-    out.columns = (
-        out.columns.astype(str)
-        .str.strip()
-        .str.replace("\n", " ", regex=False)
-        .str.replace(r"\s+", " ", regex=True)
-    )
-    return out
 
 
 def _duration_to_hours(value):
@@ -75,7 +56,7 @@ def _last_nonnull(series: pd.Series):
 
 def parse_daily_file(path: Path) -> pd.DataFrame:
     raw = pd.read_excel(path, sheet_name="Report")
-    df = _normalize_cols(raw)
+    df = normalize_cols(raw)
 
     required = [
         "Vehicle ID",
@@ -142,55 +123,6 @@ def parse_daily_file(path: Path) -> pd.DataFrame:
     return daily
 
 
-def ensure_new_vehicle(conn) -> None:
-    with conn.cursor() as cur:
-        cur.execute("SELECT id FROM fleet WHERE fleet_name = %s", (FLEET_NAME,))
-        row = cur.fetchone()
-        if row is None:
-            raise RuntimeError(f"Fleet not found: {FLEET_NAME}")
-        fleet_id = row[0]
-
-        cur.execute(
-            """
-            INSERT INTO public.vehicle (fleet_id, fleet_vehicle_id, make, model, year)
-            VALUES (%s, %s, %s, %s, %s)
-            ON CONFLICT (fleet_id, fleet_vehicle_id) DO UPDATE SET
-                make = COALESCE(vehicle.make, EXCLUDED.make),
-                model = COALESCE(vehicle.model, EXCLUDED.model),
-                year = COALESCE(vehicle.year, EXCLUDED.year)
-            """,
-            (
-                fleet_id,
-                NEW_VEHICLE["fleet_vehicle_id"],
-                NEW_VEHICLE["make"],
-                NEW_VEHICLE["model"],
-                NEW_VEHICLE["year"],
-            ),
-        )
-
-
-def load_vehicle_map(conn) -> dict[str, int]:
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT v.id, v.fleet_vehicle_id
-            FROM public.vehicle v
-            JOIN public.fleet f ON f.id = v.fleet_id
-            WHERE f.fleet_name = %s
-            """,
-            (FLEET_NAME,),
-        )
-        return {str(fleet_vehicle_id): vehicle_id for vehicle_id, fleet_vehicle_id in cur.fetchall()}
-
-
-def _nullable_int(value):
-    return int(value) if pd.notna(value) else None
-
-
-def _nullable_float(value):
-    return float(value) if pd.notna(value) else None
-
-
 def upload_daily(conn, daily: pd.DataFrame) -> int:
     rows = []
     for r in daily.itertuples(index=False):
@@ -198,16 +130,16 @@ def upload_daily(conn, daily: pd.DataFrame) -> int:
             (
                 int(r.veh_id),
                 r.date,
-                _nullable_int(r.trip_num),
-                _nullable_float(r.init_odo),
-                _nullable_float(r.final_odo),
-                _nullable_float(r.tot_dist),
-                _nullable_float(r.tot_dura),
-                _nullable_float(r.idle_time),
-                _nullable_float(r.init_soc),
-                _nullable_float(r.final_soc),
-                _nullable_float(r.tot_soc_used),
-                _nullable_float(r.tot_energy),
+                nullable_int(r.trip_num),
+                nullable_float(r.init_odo),
+                nullable_float(r.final_odo),
+                nullable_float(r.tot_dist),
+                nullable_float(r.tot_dura),
+                nullable_float(r.idle_time),
+                nullable_float(r.init_soc),
+                nullable_float(r.final_soc),
+                nullable_float(r.tot_soc_used),
+                nullable_float(r.tot_energy),
                 None,
             )
         )
@@ -261,8 +193,8 @@ def main():
         raise RuntimeError(f"Unmapped VINs: {unmapped_vins}")
 
     with get_conn() as conn:
-        ensure_new_vehicle(conn)
-        vehicle_map = load_vehicle_map(conn)
+        ensure_sq_vehicles(conn)
+        vehicle_map = load_sq_vehicle_map(conn)
 
         daily["veh_id"] = daily["fleet_vehicle_id"].map(vehicle_map)
         missing_db_ids = sorted(daily.loc[daily["veh_id"].isna(), "fleet_vehicle_id"].unique())
