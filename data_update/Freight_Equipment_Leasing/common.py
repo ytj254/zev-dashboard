@@ -25,13 +25,16 @@ def md5_file(p: Path) -> str:
     return h.hexdigest()
 
 def _log_key(file_path: Path) -> str:
+    raw = str(file_path).replace("\\", "/")
     p = Path(file_path)
+    if not p.is_absolute():
+        return raw
     for root in (Path(ROOT_DIR),):
         try:
             return p.resolve().relative_to(root.resolve()).as_posix()
         except ValueError:
             continue
-    return str(p)
+    return raw
 
 def _normalize_log_data(data: dict) -> dict:
     return {_log_key(Path(k)): v for k, v in data.items()}

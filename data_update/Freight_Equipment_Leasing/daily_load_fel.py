@@ -34,7 +34,7 @@ def parse_vehicle_sheet(sheet_df: pd.DataFrame) -> pd.DataFrame:
 
     df.columns = df.columns.str.strip()  # remove leading/trailing spaces
     df.columns = df.columns.str.replace('\n', ' ', regex=True)  # replace line breaks with space
-    df.columns = df.columns.str.replace('\s+', ' ', regex=True)  # collapse multiple spaces
+    df.columns = df.columns.str.replace(r'\s+', ' ', regex=True)  # collapse multiple spaces
 
     # Remove "Grand Total" row if present
     if "Day" in df.columns:

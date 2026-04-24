@@ -15,7 +15,7 @@ from data_update.Freight_Equipment_Leasing.common import (
 )
 
 # --- Config ---
-EXCEL_FILE = INCOMING_DATA_DIR / "Freight Equipment Leasing" / "Charging log" / "PITT OHIO Charging Sessions List 2_2_2026.xlsx"
+EXCEL_FILE = INCOMING_DATA_DIR / "Freight Equipment Leasing" / "Charging log" / "PITT OHIO Charging Sessions List PSU - March.xlsx"
 SESSIONS_SHEET = "Sessions list"
 LOCAL_TZ = "America/New_York"
 

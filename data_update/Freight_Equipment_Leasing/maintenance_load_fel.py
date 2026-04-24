@@ -1,5 +1,8 @@
 ﻿from pathlib import Path
 import re
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
+from numbers import Number
 import pandas as pd
 import psycopg2.extras as extras
 import sys, os
@@ -212,17 +215,31 @@ def _load_workbook(path: Path, asset_type: str) -> pd.DataFrame:
     return pd.concat(all_rows, ignore_index=True)
 
 
+def _compare_value(value) -> str:
+    if pd.isna(value):
+        return "__NULL__"
+    if isinstance(value, pd.Timestamp):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, (Decimal, Number)):
+        try:
+            return format(Decimal(str(value)).normalize(), "f")
+        except (InvalidOperation, ValueError):
+            return str(value).strip()
+    return str(value).strip()
+
+
 def _to_compare_frame(df: pd.DataFrame) -> pd.DataFrame:
     c = df.copy()
     for col in INSERT_COLS:
         if col not in c.columns:
             c[col] = None
-
-        s = c[col]
-        if pd.api.types.is_datetime64_any_dtype(s):
-            c[col] = s.dt.strftime("%Y-%m-%d %H:%M:%S").fillna("__NULL__")
-        else:
-            c[col] = s.where(pd.notna(s), "__NULL__").astype(str).str.strip()
+        c[col] = c[col].map(_compare_value)
 
     return c[INSERT_COLS]
 
@@ -262,6 +279,24 @@ def _filter_new_rows(conn, incoming: pd.DataFrame) -> pd.DataFrame:
     return incoming.iloc[keep_idx].copy()
 
 
+def _concat_maintenance_frames(frames: list[pd.DataFrame]) -> pd.DataFrame:
+    clean_frames = []
+    for frame in frames:
+        if frame.empty:
+            continue
+        all_na_cols = [col for col in frame.columns if frame[col].isna().all()]
+        clean_frames.append(frame.drop(columns=all_na_cols))
+
+    if not clean_frames:
+        return pd.DataFrame(columns=INSERT_COLS)
+
+    combined = pd.concat(clean_frames, ignore_index=True)
+    for col in INSERT_COLS:
+        if col not in combined.columns:
+            combined[col] = None
+    return combined
+
+
 def main():
     veh_df = _load_workbook(VEH_FILE, asset_type="vehicle")
     chg_df = _load_workbook(CHARGER_FILE, asset_type="charger")
@@ -289,11 +324,10 @@ def main():
         if dropped_unmapped_vehicle:
             veh_df = veh_df.loc[veh_df["veh_id"].notna()].copy()
 
-        frames = [f for f in (veh_df, chg_df) if not f.empty]
-        if not frames:
+        combined = _concat_maintenance_frames([veh_df, chg_df])
+        if combined.empty:
             print("[INFO] No parsed maintenance rows after mapping.")
             return
-        combined = pd.concat(frames, ignore_index=True)
 
         cols_needed = INSERT_COLS.copy()
         combined = combined[cols_needed].copy()
