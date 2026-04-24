@@ -1,14 +1,29 @@
-from dash import register_page, html, dcc, Input, Output, callback, State
+from dash import register_page, html, dcc, Input, Output, callback
 import dash_bootstrap_components as dbc
 import pandas as pd
 import plotly.express as px
 import time
+import logging
 from db import engine
 from styles import DROPDOWN_STYLE, DARK_BG, GRID_COLOR, TEXT_COLOR, empty_fig
 
 register_page(__name__, path="/veh_daily_usage", name="Vehicle Daily Usage")
+logger = logging.getLogger(__name__)
 CACHE_TTL_SECONDS = 300
-_DAILY_USAGE_CACHE = {"ts": 0.0, "df": None}
+_DAILY_USAGE_CACHE = {"ts": 0.0, "df": None, "error": None}
+TEXT_COLS = ["fleet", "make", "model", "class", "fleet_vehicle_id"]
+NUMERIC_COLS = [
+    "tot_dist",
+    "tot_energy",
+    "init_soc",
+    "final_soc",
+    "tot_soc_used",
+    "idle_time",
+    "peak_payload",
+    "efficiency",
+    "tot_dura",
+]
+DAILY_COLUMNS = TEXT_COLS + ["date"] + NUMERIC_COLS
 
 metric_options = [
     {'label': 'Total Distance (mi)', 'value': 'tot_dist'},
@@ -30,18 +45,51 @@ def load_daily_usage_data():
     query = """
         SELECT f.fleet_name AS fleet, v.make, v.model, v.class, v.fleet_vehicle_id, vd.*
         FROM veh_daily vd
-        JOIN vehicle v ON vd.veh_id = v.id
-        JOIN fleet f ON v.fleet_id = f.id
+        LEFT JOIN vehicle v ON vd.veh_id = v.id
+        LEFT JOIN fleet f ON v.fleet_id = f.id
     """
-    df = pd.read_sql(query, engine)
+    try:
+        df = pd.read_sql(query, engine)
+    except Exception as exc:
+        logger.exception("Error loading daily usage data")
+        _DAILY_USAGE_CACHE["df"] = pd.DataFrame(columns=DAILY_COLUMNS)
+        _DAILY_USAGE_CACHE["ts"] = now
+        _DAILY_USAGE_CACHE["error"] = str(exc)
+        return _DAILY_USAGE_CACHE["df"].copy()
+
+    for col in DAILY_COLUMNS:
+        if col not in df.columns:
+            df[col] = pd.NA
+
+    for col in TEXT_COLS:
+        df[col] = df[col].fillna("Unknown").astype(str)
+        df.loc[df[col].str.strip() == "", col] = "Unknown"
+
+    for col in NUMERIC_COLS:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    df["date"] = pd.to_datetime(df["date"], errors="coerce").dt.date
+    df = df.dropna(subset=["date"])
     df["tot_soc_used"] = df["tot_soc_used"] * 100
+
     _DAILY_USAGE_CACHE["df"] = df
     _DAILY_USAGE_CACHE["ts"] = now
+    _DAILY_USAGE_CACHE["error"] = None
     return df.copy()
 
+
+def daily_usage_status():
+    df = load_daily_usage_data()
+    error = _DAILY_USAGE_CACHE.get("error")
+    if error:
+        return f"Daily usage data could not be loaded: {error}"
+    if df.empty:
+        return "Daily usage data loaded, but the online database returned 0 rows."
+    latest = pd.to_datetime(df["date"], errors="coerce").max()
+    latest_text = latest.date().isoformat() if pd.notna(latest) else "unknown latest date"
+    return f"Loaded {len(df):,} daily usage rows. Latest date: {latest_text}."
+
 layout = html.Div([
-    dcc.Store(id="daily-usage-store", data=load_daily_usage_data().to_dict("records")),
-    
     # KPI cards
     dbc.Row([
         dbc.Col(dbc.Card(dbc.CardBody([html.H6("Total Distance (mi)"), html.H4(id="kpi-total-distance")]))),
@@ -53,6 +101,7 @@ layout = html.Div([
 
     html.Div([
         html.H4("Daily Usage Summary by Fleet", style={"color": TEXT_COLOR}),
+        html.Div(id="daily-usage-status", style={"color": TEXT_COLOR, "fontSize": "0.9rem", "marginBottom": "0.5rem"}),
         html.Div(id="fleet-summary-table")
     ], style={"marginBottom": "2rem"}),
 
@@ -82,14 +131,16 @@ layout = html.Div([
     ])
 ])
 
-@callback(Output('daily-usage-store', 'data'), Input('daily-usage-graph', 'id'))
-def populate_store(_):
-    df = load_daily_usage_data()
-    return df.to_dict('records')
+@callback(Output("daily-usage-status", "children"), Input("daily-usage-status", "id"))
+def update_daily_usage_status(_):
+    return daily_usage_status()
 
-@callback(Output('fleet-dropdown', 'options'), Input('daily-usage-store', 'data'))
-def load_fleet_options(records):
-    df = pd.DataFrame(records)
+
+@callback(Output('fleet-dropdown', 'options'), Input('fleet-dropdown', 'id'))
+def load_fleet_options(_):
+    df = load_daily_usage_data()
+    if df.empty or "fleet" not in df.columns:
+        return []
     fleets = sorted(df["fleet"].dropna().unique())
     return [{'label': f, 'value': f} for f in fleets]
 
@@ -98,12 +149,14 @@ def load_fleet_options(records):
     Output('model-dropdown', 'options'),
     Output('vehicle-class-dropdown', 'options'),
     Output('fleet-veh-id-dropdown', 'options'),
-    Input('fleet-dropdown', 'value'),
-    State('daily-usage-store', 'data')
+    Input('fleet-dropdown', 'value')
 )
 
-def update_filters(fleets, records):
-    df = pd.DataFrame(records)
+def update_filters(fleets):
+    df = load_daily_usage_data()
+    if df.empty:
+        return [], [], [], []
+
     if fleets:
         df = df[df["fleet"] == fleets]
 
@@ -114,8 +167,10 @@ def update_filters(fleets, records):
         [{'label': x, 'value': x} for x in sorted(df['fleet_vehicle_id'].dropna().unique())],
     )
 
-def _filter_daily(records, fleets, makes, models, classes, veh_ids, start_date, end_date):
-    df = pd.DataFrame(records)
+def _filter_daily(fleets, makes, models, classes, veh_ids, start_date, end_date):
+    df = load_daily_usage_data()
+    if df.empty:
+        return df
     df["date"] = pd.to_datetime(df["date"]).dt.date
 
     if fleets: df = df[df["fleet"] == fleets]
@@ -180,6 +235,30 @@ def _build_daily_efficiency(df):
     )
     eff_df["efficiency"] = eff_df["weighted_eff_num"] / eff_df["tot_dist_num"]
     return eff_df[["date", "efficiency"]]
+
+
+def _build_daily_metric(df, metric):
+    if df.empty or metric not in df.columns:
+        return pd.DataFrame(columns=["date", metric])
+
+    d = df[["date", metric]].copy()
+    d[metric] = pd.to_numeric(d[metric], errors="coerce")
+    d = d.dropna(subset=["date", metric])
+    if d.empty:
+        return pd.DataFrame(columns=["date", metric])
+
+    agg_func = {
+        "tot_dist": "sum",
+        "tot_energy": "sum",
+        "tot_soc_used": "mean",
+        "idle_time": "sum",
+        "peak_payload": "max",
+        "init_soc": "mean",
+        "final_soc": "mean",
+        "tot_dura": "sum",
+    }.get(metric, "mean")
+
+    return d.groupby("date", as_index=False)[metric].agg(agg_func)
 
 
 def _safe_eff(group):
@@ -268,11 +347,10 @@ def _build_fleet_summary_table(df, header_style, cell_style):
     Input('fleet-veh-id-dropdown', 'value'),
     Input('date-range-picker', 'start_date'),
     Input('date-range-picker', 'end_date'),
-    Input('metric-dropdown', 'value'),
-    State('daily-usage-store', 'data')
+    Input('metric-dropdown', 'value')
 )
-def update_figures(fleets, makes, models, classes, veh_ids, start_date, end_date, metric, records):
-    df = _filter_daily(records, fleets, makes, models, classes, veh_ids, start_date, end_date)
+def update_figures(fleets, makes, models, classes, veh_ids, start_date, end_date, metric):
+    df = _filter_daily(fleets, makes, models, classes, veh_ids, start_date, end_date)
 
     if df.empty or (metric != "efficiency" and metric not in df.columns):
         return empty_fig("No data available"), empty_fig("No data available")
@@ -285,7 +363,10 @@ def update_figures(fleets, makes, models, classes, veh_ids, start_date, end_date
             return empty_fig("No efficiency data"), empty_fig("No efficiency data")
         fig_source = eff_df
     else:
-        fig_source = df
+        fig_source = _build_daily_metric(df, metric)
+
+    if fig_source.empty:
+        return empty_fig("No data available"), empty_fig("No efficiency data" if eff_df.empty else "No data available")
 
     fig = px.bar(fig_source, x="date", y=metric, title=f"{y_label} per Day")
     fig.update_layout(
@@ -321,14 +402,13 @@ def update_figures(fleets, makes, models, classes, veh_ids, start_date, end_date
     Output("kpi-daily-driving", "children"),
     Output("kpi-daily-soc", "children"),
     Output("fleet-summary-table", "children"),
-    Input("fleet-summary-table", "id"),
-    State("daily-usage-store", "data")
+    Input("fleet-summary-table", "id")
 )
 
-def update_kpis_and_table(_, records):
+def update_kpis_and_table(_):
     header_style = {"padding": "0.3rem 0.45rem", "fontSize": "0.82rem", "whiteSpace": "nowrap"}
     cell_style = {"padding": "0.22rem 0.45rem", "fontSize": "0.82rem", "lineHeight": "1.15"}
-    df = pd.DataFrame(records)
+    df = load_daily_usage_data()
     df_summary, table_ui = _build_fleet_summary_table(df, header_style, cell_style)
     if df_summary.empty:
         return "0", "0", "0", "0", "0", table_ui
@@ -352,13 +432,12 @@ def update_kpis_and_table(_, records):
     Input('vehicle-class-dropdown', 'value'),
     Input('fleet-veh-id-dropdown', 'value'),
     Input('date-range-picker', 'start_date'),
-    Input('date-range-picker', 'end_date'),
-    State("daily-usage-store", "data")
+    Input('date-range-picker', 'end_date')
 )
-def update_filtered_summary_table(fleets, makes, models, classes, veh_ids, start_date, end_date, records):
+def update_filtered_summary_table(fleets, makes, models, classes, veh_ids, start_date, end_date):
     header_style = {"padding": "0.3rem 0.45rem", "fontSize": "0.82rem", "whiteSpace": "nowrap"}
     cell_style = {"padding": "0.22rem 0.45rem", "fontSize": "0.82rem", "lineHeight": "1.15"}
-    d = _filter_daily(records, fleets, makes, models, classes, veh_ids, start_date, end_date)
+    d = _filter_daily(fleets, makes, models, classes, veh_ids, start_date, end_date)
     if not any([fleets, makes, models, classes, veh_ids, start_date, end_date]):
         d = _default_latest_30_days(d)
     _, table_ui = _build_fleet_summary_table(d, header_style, cell_style)
