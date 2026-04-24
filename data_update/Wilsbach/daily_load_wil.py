@@ -11,7 +11,7 @@ from data_update.paths import INCOMING_DATA_DIR  # noqa: E402
 
 
 FOLDER_PATH = INCOMING_DATA_DIR / "Wilsbach Distributors" / "Daily usage"
-FILE_NAME = r"Wilsbach EV Data Collection â€“ Vehicle Daily Usage Summary 01-2026.xlsx"
+FILE_NAME = r"Wilsbach EV Data Collection – Vehicle Daily Usage Summary 03-2026.xlsx"
 
 
 def _normalize_cols(df: pd.DataFrame) -> pd.DataFrame:

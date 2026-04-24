@@ -8,7 +8,7 @@ import psycopg2.extras as extras
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 from data_update.common_data_update import get_conn  # noqa: E402
 from data_update.paths import INCOMING_DATA_DIR  # noqa: E402
-from data_update.SQTrucking.sq_common import (  # noqa: E402
+from data_update.SQTrucking.common_sq import (  # noqa: E402
     VIN_TO_FLEET_VEHICLE_ID,
     ensure_sq_vehicles,
     load_sq_vehicle_map,
